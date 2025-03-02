@@ -48,22 +48,36 @@ public:
     return true;
   }
   
+  bool send_message(const uint8_t *data, size_t len) {
+    if (!send(data, len)) {
+      log_e("Failed to broadcast message");
+      return false;
+    }
+    return true;
+  }
+
+  // Callback to handle receiving data
   void onReceive(const uint8_t *data, size_t len, bool broadcast) {
     if (len == sizeof(DataPacket)) {
       DataPacket *packet = (DataPacket *)data;
       Serial.printf("Received a message from master " MACSTR " (%s)\n", MAC2STR(addr()), broadcast ? "broadcast" : "unicast");
-      /*Serial.printf("  Port: %d, WR: %d, ADR: %d, DAT: %u\n", 
-                    packet->_PORTNUM, packet->_WR, packet->_ADR, packet->_DAT);*/
-      
+
       pn = packet->_PORTNUM;
       wr = packet->_WR;
       adr = packet->_ADR;
       dat = packet->_DAT;
 
+      // Print the received data
       Serial.print("_PORTNUM: "); Serial.println(pn);
-      Serial.print("_WR: "); Serial.println(wr);
+      Serial.print("_WR: "); Serial.println(wr,HEX);
       Serial.print("_ADR: "); Serial.println(adr);
-      Serial.print("_DAT: "); Serial.println(dat);
+      Serial.print("_DAT: "); Serial.println(dat,HEX);
+
+      delay(100);
+
+      // Send a response (if necessary) back to the transmitter:
+      uint16_t response = 0x1234;  // Example response
+      send_message((uint8_t *)&response, sizeof(response));
     } else {
       Serial.println("Received invalid data");
     }
@@ -119,7 +133,6 @@ void setup(){
   }
 
   ESP_NOW.onNewPeer(register_new_master, NULL);
-
   Serial.println("Setup complete. Waiting for a master to broadcast a message...");
 }
 

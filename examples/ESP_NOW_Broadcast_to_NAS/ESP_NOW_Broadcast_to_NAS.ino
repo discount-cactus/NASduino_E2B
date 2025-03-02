@@ -44,6 +44,21 @@ public:
 // Create a broadcast peer object
 ESP_NOW_Broadcast_Peer broadcast_peer(ESPNOW_WIFI_CHANNEL, WIFI_IF_STA, NULL);
 
+uint16_t receivedData = 0; // Variable to store the received uint16_t data
+
+// Callback function to handle incoming messages
+void onReceive(const esp_now_recv_info_t *info, const uint8_t *data, int len){
+  uint16_t received = 0;
+  if (len == sizeof(uint16_t)) {
+    received = (data[1] << 8) | data[0];
+    //Serial.printf("Received response: 0x%04X\n", received);
+  }else{
+    // If the received data is not the expected size, print an error
+    Serial.println("Error: Received data of unexpected size.");
+  }
+  Serial.println(received,HEX);
+}
+
 void setup() {
   Serial.begin(115200);
   WiFi.mode(WIFI_STA);
@@ -65,6 +80,8 @@ void setup() {
     ESP.restart();
   }
 
+  esp_now_register_recv_cb(onReceive);    // Register the onReceive callback to listen for incoming messages
+
   Serial.println("Setup complete. Broadcasting messages every 5 seconds.");
 }
 
@@ -72,7 +89,7 @@ void loop() {
   // Prepare the data to send
   DataPacket packet;
   packet._PORTNUM = 5;    // Example port number
-  packet._WR = 1;         // Example WR value (write command)
+  packet._WR = 0xA;         // Example WR value (write command)
   packet._ADR = 26281432; // Example address (integer)
   packet._DAT = 0xA3F1;   // Example data (uint16_t)
 
@@ -85,5 +102,5 @@ void loop() {
     Serial.println("Failed to broadcast message");
   }
 
-  delay(5000);  // Broadcast every 5 seconds
+  delay(2000);  // Broadcast every 2 seconds
 }
