@@ -1,20 +1,25 @@
 //E2B NAS Controller
-//The NAS controller is any uC that manages connected SSD's and communicates wirelessly with devices requiring additional storage
-//Manages connecting to master device via ESP-NOW (refer to ESP_NOW_Broadcast_Slave sketch)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*NOTES:
+This sketch controls the NAS system and its subsequent SSD's via E2B and uses an ESP32 to communicate with the
+device connected to the NAS via ESP-NOW which is also an ESP32 (for simplicity)
+*/
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /*TO-DO:
--Function that re-initializes the list of connecteed SSD's (with the push of a button)
--Connectivity to master via ESP-NOW
+-Update _connectedDevices to make sure there's no missing devices that should be there
 */
+
 #include <E2B.h>
 #include "ESP32_NOW.h"
 #include "WiFi.h"
 #include <esp_mac.h>  // For the MAC2STR and MACSTR macros
 #include <vector>
 
-#define E2B_pin 2
+#define E2B_pin 4
 #define ESPNOW_WIFI_CHANNEL 6
 #define buttonPin 5
+#define MaxConnectedDeviceNum 12
 
 // Define the structure to hold the data
 struct DataPacket {
@@ -31,6 +36,7 @@ uint8_t wr;
 int adr;
 uint16_t dat;
 uint8_t packetData[8];
+uint8_t _connectedDevices[MaxConnectedDeviceNum][8];
 
 E2B e2b(E2B_pin);  // on pin 2 (a 4.7K resistor is necessary)
 
@@ -107,11 +113,102 @@ void register_new_master(const esp_now_recv_info_t *info, const uint8_t *data, i
   }
 }
 
+void IRAM_ATTR refresh_connected_devices(){
+  Serial.println("Starting refresh_connected_devices");
+  byte i,j,k;
+  byte addr[8];
+  
+  //Finds a new address
+  for(i=0; i < MaxConnectedDeviceNum; i++){
+    if(!e2b.search(addr)){
+      Serial.println("No more addresses.");
+      Serial.println();
+      e2b.reset_search();
+      delay(250);
+      return;
+    }
+    
+    //Prints the address
+    /*Serial.print("ROM =");
+    for(j=0; j < 8; j++) {
+      Serial.write(' ');
+      Serial.print(addr[j], HEX);
+    }
+    if (E2B::crc8(addr, 7) != addr[7]) {
+        Serial.println("CRC is not valid!");
+        return;
+    }
+    Serial.println();*/
+
+    //Searches for first empty index and for matches of address
+    bool beenLogged = 0;
+    int firstEmptyIndex = -1;
+    for(j=0; j < MaxConnectedDeviceNum; j++){
+      if(!beenLogged){        //If the devices haas already been logged, don't keep searching
+        bool mismatch = 0;
+        bool isEmpty = 1;
+        for(k=0; k < 8; k++){
+          if((_connectedDevices[j][k] != addr[k]) && (!mismatch)){      //Scans index for a match
+            mismatch = 1;
+          }
+          if((_connectedDevices[j][k] != 0x0) && (isEmpty)){            //Scans empty index
+            isEmpty = 0;
+          }
+        }
+        /*if(isEmpty){
+          //Update _connectedDevices to make sure there's no missing devices that should be there
+        }*/
+        if((isEmpty) && (firstEmptyIndex == -1)){
+          firstEmptyIndex = j;
+          //Serial.print("First empty index found at: "); Serial.println(j);
+        }
+        if(!mismatch){
+          beenLogged = 1;
+          //Serial.print("Device already logged at index: "); Serial.println(j);
+        }
+      }
+    }
+
+    //If the address hasn't been logged yet and there is no matching address
+    if((!beenLogged) && (firstEmptyIndex != -1)){
+      //Serial.print("Logging new device into index: "); Serial.println(firstEmptyIndex);
+      for(k=0; k < 8; k++){
+        _connectedDevices[firstEmptyIndex][k] = addr[k];
+      }
+    }
+
+
+  }
+}
+
+void initialize_connected_devices(){
+  for(byte i=0; i < MaxConnectedDeviceNum; i++){
+    for(byte j=0; j < 8; j++){
+      _connectedDevices[i][j] = 0x0;
+    }
+  }
+}
+
+void print_connected_devices(){
+  //Prints the current state of _connectedDevices
+    Serial.println("_connectedDevices:");
+    for(byte i=0; i < MaxConnectedDeviceNum; i++){
+      Serial.print("Slot "); Serial.print(i); Serial.print(": ");
+      for(byte j=0; j < 8; j++){
+        Serial.print(_connectedDevices[i][j],HEX); Serial.print(" ");
+      }
+      Serial.println();
+    }
+}
+
 void setup(){
   Serial.begin(9600);
   while(!Serial);
   Serial.println("E2B NAS Controller.");
   pinMode(buttonPin,INPUT_PULLUP);
+  //attachInterrupt(buttonPin,refresh_connected_devices,FALLING);
+
+  initialize_connected_devices();
 
   // Initialize the Wi-Fi module
   WiFi.mode(WIFI_STA);
@@ -137,6 +234,19 @@ void setup(){
 }
 
 void loop(){
+  int buttonPressed = 0;
+  if(!digitalRead(buttonPin)){
+    while(!digitalRead(buttonPin)){
+      buttonPressed++;
+      delay(10);
+    }
+    if(buttonPressed < 100){
+      refresh_connected_devices();
+    }else{
+      initialize_connected_devices();
+    }
+    print_connected_devices();
+  }
   //Serial.println(digitalRead(buttonPin));
   /*prepareData("WRITE", 26281432, 0xA3F1);
 

@@ -1,7 +1,13 @@
+//ESP32_Broadcast_to_NAS example
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*NOTES:
+This sketch uses an ESP32 to communicate to the NAS Controller which is also an ESP32
+via ESP-NOW to send/receive commands from the NAS
+*/
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #include "ESP32_NOW.h"
 #include "WiFi.h"
 #include <esp_mac.h>
-
 #define ESPNOW_WIFI_CHANNEL 6
 
 // Define the structure to hold the data

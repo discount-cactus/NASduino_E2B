@@ -1,20 +1,19 @@
 //ATtiny UART-to-E2B bridge example
-//Simple conversion from UART-to-E2B bridge for use as a seamless transceiver between devices
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*NOTES:
+This sketch is a simple conversion from UART-to-E2B bridge for use as a seamless transceiver between devices
+
 -MADE FOR USE WITH THE ATTINY85 MICROCONTROLLER
 -Receives a UART packet and transmits it on the E2B pin
 -Receives a E2B packet and transmits it on the UART pins
-
+-Direction of transmission is governed by the dirPin which is an I/O pin toggled by the device connected via softserial
 -ATtiny85 does not feature a dedicated UART port, so SoftwareSerial is used
 
--TaskScheduler is used to complete sending and receiving of different protocols in parallel
--Link to TaskScheduler library: https://github.com/arkhipenko/TaskScheduler
-
 Hookup :
-ATtiny85 RX pin: -> Arduino RX     (pin 0 on Arduino Uno)
-ATtiny85 TX pin: -> Arduino TX     (pin 1 on Arduino Uno)
+ATtiny85 TX pin: -> Arduino RX     (pin 0 on Arduino Uno)
+ATtiny85 RX pin: -> Arduino TX     (pin 1 on Arduino Uno)
 */
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #include <E2B.h>
 #include <SoftwareSerial.h>
  
@@ -37,7 +36,7 @@ void setup(){
   attachInterrupt(E2B_pin,respond,CHANGE);
   Serial.begin(9600);
   while(!Serial);
-  Serial.println("E2B NAS Transiever Test.");
+  Serial.println("Macchiato E2B Transiever");
   e2b.setBusType(TRANSCEIVER);
   mySerial.begin(9600);
   pinMode(dirPin,INPUT);

@@ -1,11 +1,21 @@
 //MAcchiato E2B SSD (Rev1) Example
-/*Features:
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*NOTES:
+This sketch manages data requests from the Macchiato Transceiver and upstream hardware and writes/reads from the onboard flash chip
+-THIS SKETCH IS OBSOLETE - USE Macchiato_Rev2.ino FOR USE WITH MACCHIATO REV2 BOARDS
+-THIS CODE WAS DEVELOPED FOR MACCHIATO REV1 WHICH HAS SINCE BEEN REPLACED BY MACCHIATO REV2
+
+-The flash chips (S29GL256S10TFV010) each have 256MB of nonvolatile flash memory
+-The SDRAM chip (W9825G6KH-6) has 256MB of volatile SDRAM memory
+
+Features:
 -Integrated E2B
 -E2B Transciever via ATtiny85
 -DS3231 RTC
 -SPI SD card
 -MODE button for switching between operating modes
 */
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #include <Adafruit_MCP23X17.h>
 /*#include "FS.h"
 #include "SD.h"
