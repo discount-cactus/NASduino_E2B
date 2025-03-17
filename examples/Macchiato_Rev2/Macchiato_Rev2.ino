@@ -103,7 +103,7 @@ void MODE_button_manager(){
 //Receives UART packet
 bool receive_packet(){
   digitalWrite(E2B_ALT_DIR,HIGH);
-  if (mySerial.available() == 8){
+  if (mySerial.available()){
     int receivedInt = 0;
     Serial.print("Received Data: ");
     for (uint8_t i=0; i < 8; i++) {

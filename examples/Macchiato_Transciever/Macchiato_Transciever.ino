@@ -33,10 +33,10 @@ SoftwareSerial mySerial(rxPin, txPin);
 int adr = 15;   //Temporary, for testing
 
 void setup(){
-  attachInterrupt(E2B_pin,respond,CHANGE);
-  Serial.begin(9600);
-  while(!Serial);
-  Serial.println("Macchiato E2B Transiever");
+  //attachInterrupt(E2B_pin,respond,CHANGE);
+  //Serial.begin(9600);
+  //while(!Serial);
+  //Serial.println("Macchiato E2B Transiever");
   e2b.setBusType(TRANSCEIVER);
   mySerial.begin(9600);
   pinMode(dirPin,INPUT);
@@ -46,9 +46,9 @@ void setup(){
   e2b.setScratchpad(scratchpad);
 }
 
-void respond(){
+/*void respond(){
   e2b.MasterResetPulseDetection();
-}
+}*/
 
 void loop(){
   bool dir = digitalRead(dirPin);
@@ -71,8 +71,8 @@ void uart_to_e2b(){
     low = mySerial.read();
     high = mySerial.read();
     uint16_t dataE2B = high<<8 | low;
-    Serial.print(dataE2B,HEX);
-    Serial.println();
+    //Serial.print(dataE2B,HEX);
+    //Serial.println();
   }
   /*if (mySerial.available()){
     uint8_t dataUART = mySerial.read();
@@ -92,13 +92,13 @@ void e2b_to_uart(){
   //uint8_t dataE2B[8] = {0xA, 0x5, 0x0, 0x0, 0x0, 0xF1, 0xA3, 0x0};
   uint8_t dataE2B[8];
   e2b.waitForRequest(false);
-  Serial.print("Received E2B Data: ");
+  //Serial.print("Received E2B Data: ");
     for(int i=0; i < 8; i++){
       dataE2B[i] = e2b.scratchpad[i];
-      Serial.print(dataE2B[i],HEX); Serial.print(" ");
+      //Serial.print(dataE2B[i],HEX); Serial.print(" ");
       e2b.scratchpad[i] = 0x00;
     }
-    Serial.println();
+    //Serial.println();
 
   //Transmit packet
   for (int i=0; i < 8; i++){

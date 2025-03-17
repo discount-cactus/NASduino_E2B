@@ -40,6 +40,7 @@ uint8_t _connectedDevices[MaxConnectedDeviceNum][8];
 
 E2B e2b(E2B_pin);  // on pin 2 (a 4.7K resistor is necessary)
 
+
 // Classes for peer management, same as original code
 class ESP_NOW_Peer_Class : public ESP_NOW_Peer {
 public:
@@ -79,7 +80,83 @@ public:
       Serial.print("_ADR: "); Serial.println(adr);
       Serial.print("_DAT: "); Serial.println(dat,HEX);
 
-      delay(100);
+      /*if(wr == 0xA){
+        prepareData("WRITE", adr, dat);
+      }else if(wr == 0xB){
+        prepareData("READ", adr, dat);
+      }*/
+      int i;
+      ///////////////////////////////////////////////////////////////////////////////////////////////////
+      //Determines if the instruction is to read or write
+      packetData[0] = wr;
+    
+      //Encodes the address into 4 bytes
+      for (i=1; i < 5; i++) {
+        packetData[i] = (adr >> (i * 8)) & 0xFF; // Extract each byte
+      }
+
+      //Encodes the data
+      packetData[5] = lowByte(dat);
+      packetData[6] = highByte(dat);
+      packetData[7] = 0x00;
+      ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+      byte present = 0;
+      byte data[9];
+      byte addr[8];
+      
+      //Searches for device
+      //This section is not neededd if only one device is connected
+      if(!e2b.search(addr)){
+        Serial.println("No more addresses.");
+        Serial.println();
+        e2b.reset_search();
+        delay(250);
+        return;
+      }
+      
+      Serial.print("ROM =");
+      for(i=0; i < 8; i++) {
+        Serial.write(' ');
+        Serial.print(addr[i], HEX);
+      }
+
+      if (E2B::crc8(addr, 7) != addr[7]) {
+          Serial.println("CRC is not valid!");
+          return;
+      }
+      /*Serial.println();
+      for(i=0; i < 8; i++){
+        addr[i] = _connectedDevices[pn][i];
+      }*/
+
+      //Transmits ddata
+      e2b.reset();
+      e2b.select(addr);
+      e2b.write_scratchpad(); //e2b.write(0x4E);        //Writes the following data to the transciever's scratchpad
+      for(i=0; i < 8; i++){
+        e2b.write(packetData[i]);
+      }
+      
+      delay(1000);
+      
+      present = e2b.reset();
+      e2b.select(addr);
+      e2b.write(0xBE);         // Read Scratchpad
+
+      Serial.print("  Data = ");
+      Serial.print(present, HEX);
+      Serial.print(" ");
+      for (i=0; i < 9; i++) {           // we need 9 bytes
+        data[i] = e2b.read();
+        Serial.print(data[i], HEX);
+        Serial.print(" ");
+      }
+      Serial.print(" CRC=");
+      Serial.print(E2B::crc8(data, 8), HEX);
+      Serial.println();
+
+      delay(50);
 
       // Send a response (if necessary) back to the transmitter:
       uint16_t response = 0x1234;  // Example response
@@ -308,8 +385,10 @@ void loop(){
 
 
 
+
+
 //Prepares data and instructions to be sent to transciever and SSD
-void prepareData(String wr, int address, uint16_t data){
+/*void prepareData(String wr, int address, uint16_t data){
   int i;
 
   //Determines if the instruction is to read or write
@@ -328,8 +407,4 @@ void prepareData(String wr, int address, uint16_t data){
   packetData[5] = lowByte(data);
   packetData[6] = highByte(data);
   packetData[7] = 0x00;
-}
-
-
-
-
+}*/
