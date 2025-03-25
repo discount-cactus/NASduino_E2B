@@ -38,7 +38,7 @@ uint16_t dat;
 uint8_t packetData[8];
 uint8_t _connectedDevices[MaxConnectedDeviceNum][8];
 
-E2B e2b(E2B_pin);  // on pin 2 (a 4.7K resistor is necessary)
+E2B e2b(E2B_pin);  // on pin 4 (a 4.7K resistor is necessary)
 
 
 // Classes for peer management, same as original code
@@ -80,11 +80,6 @@ public:
       Serial.print("_ADR: "); Serial.println(adr);
       Serial.print("_DAT: "); Serial.println(dat,HEX);
 
-      /*if(wr == 0xA){
-        prepareData("WRITE", adr, dat);
-      }else if(wr == 0xB){
-        prepareData("READ", adr, dat);
-      }*/
       int i;
       ///////////////////////////////////////////////////////////////////////////////////////////////////
       //Determines if the instruction is to read or write
@@ -133,33 +128,31 @@ public:
       //Transmits ddata
       e2b.reset();
       e2b.select(addr);
-      e2b.write_scratchpad(); //e2b.write(0x4E);        //Writes the following data to the transciever's scratchpad
+      e2b.write_scratchpad();
       for(i=0; i < 8; i++){
         e2b.write(packetData[i]);
       }
       
-      delay(1000);
+      delay(300);
       
       present = e2b.reset();
       e2b.select(addr);
-      e2b.write(0xBE);         // Read Scratchpad
+      e2b.read_scratchpad(); //e2b.write(0xBE);         // Read Scratchpad
 
-      Serial.print("  Data = ");
+      Serial.print("\t\tData = ");
       Serial.print(present, HEX);
       Serial.print(" ");
-      for (i=0; i < 9; i++) {           // we need 9 bytes
+      for (i=0; i < 2; i++) {           // we need 9 bytes
         data[i] = e2b.read();
         Serial.print(data[i], HEX);
         Serial.print(" ");
       }
-      Serial.print(" CRC=");
-      Serial.print(E2B::crc8(data, 8), HEX);
       Serial.println();
-
       delay(50);
 
       // Send a response (if necessary) back to the transmitter:
       uint16_t response = 0x1234;  // Example response
+      //uint16_t response = data[1]<<8 | data[0];
       send_message((uint8_t *)&response, sizeof(response));
     } else {
       Serial.println("Received invalid data");
@@ -279,7 +272,7 @@ void print_connected_devices(){
 }
 
 void setup(){
-  Serial.begin(9600);
+  Serial.begin(115200);
   while(!Serial);
   Serial.println("E2B NAS Controller.");
   pinMode(buttonPin,INPUT_PULLUP);

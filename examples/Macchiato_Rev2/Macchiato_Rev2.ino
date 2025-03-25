@@ -17,9 +17,9 @@ Features:
 #define MODE_PIN 14
 
 //#define E2B_pin 4
-#define UART_RX 18
-#define UART_TX 17
-#define E2B_ALT_DIR 16
+#define UART_RX 22 //18
+#define UART_TX 23 //17
+#define E2B_ALT_DIR 1
 
 //#define FLASH_WP 13
 #define FLASH_CE 9
@@ -35,12 +35,15 @@ uint8_t dataReceived[8];
 
 Adafruit_MCP23X17 mcp1;
 Adafruit_MCP23X17 mcp2;
+//HardwareSerial mySerial(1);
 SoftwareSerial mySerial(UART_RX,UART_TX); // RX, TX
 
 void setup() {
   Serial.begin(115200);
   while(!Serial){}
   mySerial.begin(9600);
+  //mySerial.begin(9600, SERIAL_8N1, UART_RX, UART_TX);
+  while(!mySerial){}
   Serial.println("Macchiato E2B SSD Test!");
   pinMode(E2B_ALT_DIR,OUTPUT);
 
@@ -54,7 +57,7 @@ void setup() {
   pinMode(FLASH_WE, OUTPUT);
 
   //Initializes the IO expanders
-  if(!mcp1.begin_I2C(0x20)){
+  /*if(!mcp1.begin_I2C(0x20)){
     Serial.println("Error initializing MCP1.");
     while(1);
   }
@@ -66,20 +69,13 @@ void setup() {
   for (uint8_t i=0; i < 16; i++){
     mcp1.pinMode(i, OUTPUT);
     mcp2.pinMode(i, OUTPUT);
-  }
+  }*/
 
-  /*int receivedInt = 2379;
-  uint16_t d = 0x4A3D;
-  ssd_write_flash(receivedInt,d);
-  //Serial.println(ssd_read_flash(receivedInt));
-  uint16_t dataOutgoing = ssd_read_flash(receivedInt);
-  //dataOutgoing = 0x4A3D;*/
 }
 
 void loop(){
   MODE_button_manager();
   receive_packet();
-  transmit_packet();
 }
 
 
@@ -103,11 +99,19 @@ void MODE_button_manager(){
 //Receives UART packet
 bool receive_packet(){
   digitalWrite(E2B_ALT_DIR,HIGH);
-  if (mySerial.available()){
+
+  if(mySerial.available() == 8){
+    delay(50);            //Tune this if data gets unstable (usually it needs an increase)
     int receivedInt = 0;
-    Serial.print("Received Data: ");
-    for (uint8_t i=0; i < 8; i++) {
+    //Serial.print("Received Data: ");
+    for (int i=0; i < 8; i++) {
       dataReceived[i] = mySerial.read();
+      if(i == 0){
+        if((dataReceived[0] == 0xA) || (dataReceived[0] == 0xB)){
+        }else{
+          return 0;
+        }
+      }
       Serial.print(dataReceived[i],HEX); Serial.print(" ");
       if((i >= 1) && (i <= 4)){
         if(i >= 3){
@@ -119,35 +123,22 @@ bool receive_packet(){
     }
     Serial.println();
 
-    if(dataReceived[7] != 0x0){         //Data corruption detected, should be 0x0
-    Serial.println(":(");
-      return 0;
-    }
-
     if(dataReceived[0] == 0xA){         //Write
       uint16_t dataToWriteToMemory = dataReceived[5]<<8 | dataReceived[6];
-      ssd_write_flash(receivedInt,dataToWriteToMemory);
+      //ssd_write_flash(receivedInt,dataToWriteToMemory);
+      transmit_packet();
     }else if(dataReceived[0] == 0xB){   //Read
-      dataOutgoing = ssd_read_flash(receivedInt);
+      //dataOutgoing = ssd_read_flash(receivedInt);
+      //transmit_packet();
     }else{
       return 0;
     }
-  /*if (mySerial.available() == 4){
-    int receivedInt = 0;
-    for (int i=0; i < 4; i++) {
-      byte byteRead = mySerial.read();
-      if(i >= 2){
-        receivedInt |= (int32_t)(byteRead << (i * 8)); // Combine bytes
-      }else{
-        receivedInt |= (byteRead << (i * 8)); // Combine bytes
-      }
-    }*/
-    //Serial.println(receivedInt);
   }
 }
 
 //Transmits UART packet
 void transmit_packet(){
+  dataOutgoing = 0xADD2;
   digitalWrite(E2B_ALT_DIR,LOW);
   mySerial.write(lowByte(dataOutgoing));
   mySerial.write(highByte(dataOutgoing));
