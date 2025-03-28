@@ -126,10 +126,9 @@ bool receive_packet(){
     if(dataReceived[0] == 0xA){         //Write
       uint16_t dataToWriteToMemory = dataReceived[5]<<8 | dataReceived[6];
       //ssd_write_flash(receivedInt,dataToWriteToMemory);
-      transmit_packet();
     }else if(dataReceived[0] == 0xB){   //Read
       //dataOutgoing = ssd_read_flash(receivedInt);
-      //transmit_packet();
+      transmit_packet();
     }else{
       return 0;
     }

@@ -30,8 +30,6 @@ unsigned char scratchpad[9] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0
 E2B e2b(E2B_pin);
 SoftwareSerial mySerial(rxPin, txPin);
 
-int adr = 15;   //Temporary, for testing
-
 void setup(){
   attachInterrupt(E2B_pin,respond,CHANGE);
   Serial.begin(9600);
@@ -52,31 +50,12 @@ void respond(){
 }
 
 void loop(){
-  bool dir = digitalRead(dirPin);
-  if(!dir){
-    uart_to_e2b();
-  }else{
+  if(digitalRead(dirPin)){
     e2b_to_uart();
   }
-  //delay(1000);
 }
 
-void uart_to_e2b(){
-  //Get UART, send E2B
-  //Receive packet
-  if(mySerial.available()){
-    delay(100);            //Tune this if data gets unstable (usually it needs an increase)
-    byte low,high;
-    low = mySerial.read();
-    high = mySerial.read();
-    uint16_t dataE2B = high<<8 | low;
-    //Serial.print(dataE2B,HEX);
-    Serial.println();
-    e2b.scratchpad[0] = low;
-    e2b.scratchpad[1] = high;
-  }
-}
-
+//Converts E2B data to UART data to be sent to the SSD
 void e2b_to_uart(){
   //Get E2B, send UART
   uint8_t dataE2B[8];
@@ -92,5 +71,22 @@ void e2b_to_uart(){
     Serial.println();
 
     uart_to_e2b();
+  }
+}
+
+//Converts UART data to E2B data to be sent back to the NAS controller
+void uart_to_e2b(){
+  //Get UART, send E2B
+  //Receive packet
+  if(mySerial.available()){
+    delay(100);            //Tune this if data gets unstable (usually it needs an increase)
+    byte low,high;
+    low = mySerial.read();
+    high = mySerial.read();
+    uint16_t dataE2B = high<<8 | low;
+    //Serial.print(dataE2B,HEX);
+    Serial.println();
+    e2b.scratchpad[0] = low;
+    e2b.scratchpad[1] = high;
   }
 }

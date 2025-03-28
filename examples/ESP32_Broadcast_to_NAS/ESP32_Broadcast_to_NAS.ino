@@ -18,13 +18,13 @@ struct DataPacket {
   uint16_t _DAT;      // uint16_t variable for data
 };
 
-class ESP_NOW_Broadcast_Peer : public ESP_NOW_Peer {
+class ESP_NOW_Client_Peer : public ESP_NOW_Peer {
 public:
   // Constructor of the class using the broadcast address
-  ESP_NOW_Broadcast_Peer(uint8_t channel, wifi_interface_t iface, const uint8_t *lmk) : ESP_NOW_Peer(ESP_NOW.BROADCAST_ADDR, channel, iface, lmk) {}
+  ESP_NOW_Client_Peer(uint8_t channel, wifi_interface_t iface, const uint8_t *lmk) : ESP_NOW_Peer(ESP_NOW.BROADCAST_ADDR, channel, iface, lmk) {}
 
   // Destructor of the class
-  ~ESP_NOW_Broadcast_Peer() {
+  ~ESP_NOW_Client_Peer() {
     remove();
   }
 
@@ -48,7 +48,7 @@ public:
 };
 
 // Create a broadcast peer object
-ESP_NOW_Broadcast_Peer broadcast_peer(ESPNOW_WIFI_CHANNEL, WIFI_IF_STA, NULL);
+ESP_NOW_Client_Peer broadcast_peer(ESPNOW_WIFI_CHANNEL, WIFI_IF_STA, NULL);
 
 uint16_t receivedData = 0; // Variable to store the received uint16_t data
 
@@ -94,8 +94,8 @@ void setup() {
 void loop() {
   // Prepare the data to send
   DataPacket packet;
-  packet._PORTNUM = 5;    // Example port number
-  packet._WR = 0xA;         // Example WR value (write command)
+  packet._PORTNUM = 0;    // Example port number
+  packet._WR = 0xB;         // Example WR value (write command)
   packet._ADR = 26281432; // Example address (integer)
   packet._DAT = 0xA3F1;   // Example data (uint16_t)
 
@@ -108,5 +108,5 @@ void loop() {
     Serial.println("Failed to broadcast message");
   }
 
-  delay(2000);  // Broadcast every 2 seconds
+  delay(3000);  // Broadcast every 2 seconds
 }
