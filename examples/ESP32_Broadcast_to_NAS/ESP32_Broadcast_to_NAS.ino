@@ -93,9 +93,9 @@ void setup() {
 
 void loop() {
   // Prepare the data to send
-  DataPacket packet;
+  /*DataPacket packet;
   packet._PORTNUM = 0;    // Example port number
-  packet._WR = 0xB;         // Example WR value (write command)
+  packet._WR = 0xA;         // Example WR value (write command)
   packet._ADR = 26281432; // Example address (integer)
   packet._DAT = 0xA3F1;   // Example data (uint16_t)
 
@@ -106,7 +106,52 @@ void loop() {
   // Send the message
   if (!broadcast_peer.send_message((uint8_t *)&packet, sizeof(packet))) {
     Serial.println("Failed to broadcast message");
-  }
+  }*/
+  //query_nas_write(0,26281432,0xA3F1);
+  //query_nas_read(0,26281432);
 
-  delay(3000);  // Broadcast every 2 seconds
+  //query_nas_write(0,26281432,0xA3F1);
+  query_nas_write(0,17,0xE5E5);
+  delay(2000);
+  query_nas_read(0,17);
+  delay(2000);
+}
+
+
+//Writes to the NAS
+void query_nas_write(uint8_t port, int address, uint16_t dat){
+  // Prepare the data to send
+  DataPacket packet;
+  packet._PORTNUM = port;    // Example port number
+  packet._WR = 0xA;         // Example WR value (write command)
+  packet._ADR = address; // Example address (integer)
+  packet._DAT = dat;   // Example data (uint16_t)
+
+  // Print the message being sent for debugging
+  Serial.printf("Broadcasting message: Port: %d, WR: %d, ADR: %d, DAT: %u\n", 
+                packet._PORTNUM, packet._WR, packet._ADR, packet._DAT);
+
+  // Send the message
+  if (!broadcast_peer.send_message((uint8_t *)&packet, sizeof(packet))) {
+    Serial.println("Failed to broadcast message");
+  }
+}
+
+//Reads from the NAS
+void query_nas_read(uint8_t port, int address){
+  // Prepare the data to send
+  DataPacket packet;
+  packet._PORTNUM = port;    // Example port number
+  packet._WR = 0xB;         // Example WR value (write command)
+  packet._ADR = address; // Example address (integer)
+  packet._DAT = 0x0000;   // Example data (uint16_t)
+
+  // Print the message being sent for debugging
+  Serial.printf("Broadcasting message: Port: %d, WR: %d, ADR: %d, DAT: %u\n", 
+                packet._PORTNUM, packet._WR, packet._ADR, packet._DAT);
+
+  // Send the message
+  if (!broadcast_peer.send_message((uint8_t *)&packet, sizeof(packet))) {
+    Serial.println("Failed to broadcast message");
+  }
 }
