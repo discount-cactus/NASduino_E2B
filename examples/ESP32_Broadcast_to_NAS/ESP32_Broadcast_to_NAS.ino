@@ -15,7 +15,7 @@ struct DataPacket {
   uint8_t _PORTNUM;   // Byte variable for port number
   uint8_t _WR;        // Byte variable for WR
   int _ADR;           // Integer variable for address
-  uint16_t _DAT;      // uint16_t variable for data
+  uint8_t _DAT;      // uint16_t variable for data
 };
 
 class ESP_NOW_Client_Peer : public ESP_NOW_Peer {
@@ -54,9 +54,9 @@ uint16_t receivedData = 0; // Variable to store the received uint16_t data
 
 // Callback function to handle incoming messages
 void onReceive(const esp_now_recv_info_t *info, const uint8_t *data, int len){
-  uint16_t received = 0;
-  if (len == sizeof(uint16_t)) {
-    received = (data[1] << 8) | data[0];
+  uint8_t received = 0;
+  if (len == sizeof(uint8_t)) {
+    received = data[0];
     //Serial.printf("Received response: 0x%04X\n", received);
   }else{
     // If the received data is not the expected size, print an error
@@ -88,44 +88,25 @@ void setup() {
 
   esp_now_register_recv_cb(onReceive);    // Register the onReceive callback to listen for incoming messages
 
-  Serial.println("Setup complete. Broadcasting messages every 5 seconds.");
+  Serial.println("Setup complete. Broadcasting messages every 2 seconds.");
 }
 
-void loop() {
-  // Prepare the data to send
-  /*DataPacket packet;
-  packet._PORTNUM = 0;    // Example port number
-  packet._WR = 0xA;         // Example WR value (write command)
-  packet._ADR = 26281432; // Example address (integer)
-  packet._DAT = 0xA3F1;   // Example data (uint16_t)
-
-  // Print the message being sent for debugging
-  Serial.printf("Broadcasting message: Port: %d, WR: %d, ADR: %d, DAT: %u\n", 
-                packet._PORTNUM, packet._WR, packet._ADR, packet._DAT);
-
-  // Send the message
-  if (!broadcast_peer.send_message((uint8_t *)&packet, sizeof(packet))) {
-    Serial.println("Failed to broadcast message");
-  }*/
-  //query_nas_write(0,26281432,0xA3F1);
-  //query_nas_read(0,26281432);
-
-  //query_nas_write(0,26281432,0xA3F1);
-  query_nas_write(0,17,0xE5E5);
-  delay(2000);
+void loop(){
+  query_nas_write(0,17,0x62);
+  delay(500);
   query_nas_read(0,17);
-  delay(2000);
+  delay(500);
 }
 
 
 //Writes to the NAS
-void query_nas_write(uint8_t port, int address, uint16_t dat){
+void query_nas_write(uint8_t port, int address, uint8_t dat){
   // Prepare the data to send
   DataPacket packet;
   packet._PORTNUM = port;    // Example port number
   packet._WR = 0xA;         // Example WR value (write command)
   packet._ADR = address; // Example address (integer)
-  packet._DAT = dat;   // Example data (uint16_t)
+  packet._DAT = dat;   // Example data (uint8_t)
 
   // Print the message being sent for debugging
   Serial.printf("Broadcasting message: Port: %d, WR: %d, ADR: %d, DAT: %u\n", 

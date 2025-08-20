@@ -159,20 +159,20 @@ void handle_command(){
   //If we get a "write scratchpad" command
   for(int i=0; i < 8; i++){
     dataE2B[i] = e2b.scratchpad[i];
-    Serial.print(dataE2B[i],HEX); Serial.print(" ");
+    //Serial.print(dataE2B[i],HEX); Serial.print(" ");
   }
   receivedAddress = (dataE2B[1]) | (dataE2B[2] << 8) | (dataE2B[3] << 16) | (dataE2B[4] << 24);
   receivedAddress &= ~0x1UL;   // Clear bit 0 to ensure even addresses
   //Serial.print("receivedAddress: "); Serial.print(receivedAddress,HEX); //Serial.println();
   if(receivedAddress < 0){
-    //Serial.println("(ERROR: Negative value!)");
-    //return 0;
-  }else{
+    Serial.println("(ERROR: Negative value!)");
+    return 0;
+  }/*else{
     Serial.println("");
-  }
+  }*/
   //Reads/writes to the flash chip
   if(dataE2B[0] == 0xA){         //Write
-    uint16_t dataToWriteToMemory = dataE2B[5]<<8 | dataE2B[6];
+    uint8_t dataToWriteToMemory = dataE2B[5]; //dataE2B[5]<<8 | dataE2B[6];
     ssd_write_flash(receivedAddress,dataToWriteToMemory);
     e2b.scratchpad[7] = 0xFE;
     delay(10);
@@ -180,7 +180,7 @@ void handle_command(){
     dataOutgoing = ssd_read_flash(receivedAddress);
     //dataOutgoing = 0xAD72;
     e2b.scratchpad[0] = lowByte(dataOutgoing);
-    e2b.scratchpad[1] = highByte(dataOutgoing);
+    e2b.scratchpad[1] = 0;
     e2b.scratchpad[5] = 0;
     e2b.scratchpad[6] = 0;
     e2b.scratchpad[7] = 0xFE;

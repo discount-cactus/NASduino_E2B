@@ -32,7 +32,7 @@ struct DataPacket {
   uint8_t _PORTNUM;   // Byte variable for port number
   uint8_t _WR;        // Byte variable for WR
   int _ADR;           // Integer variable for address
-  uint16_t _DAT;      // uint16_t variable for data
+  uint8_t _DAT;      // uint16_t variable for data
 };
 
 unsigned char rom[8] = {FAMILYCODE, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x11, 0x00};
@@ -161,7 +161,7 @@ public:
         //delay(50);
 
         // Send a response (if necessary) back to the transmitter:
-        uint16_t response = data[1]<<8 | data[0];
+        uint8_t response = data[0];
         //Serial.print("response: "); Serial.println(response,HEX);
         send_message((uint8_t *)&response, sizeof(response));
       }
