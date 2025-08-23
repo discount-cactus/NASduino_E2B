@@ -1,12 +1,10 @@
+//Macchiato E2B SSD (Rev4) - EEPROM variant
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*NOTES:
-This sketch manages read/write requests from the NAS controller and interfaces with the onboard flash chip
+This sketch manages read/write requests from the NAS controller and interfaces with the onboard EEPROM chip
 -The EEPROM chip (AT28C256-15PU) has 256kbit of non-volatile memory
     -Total Size: 256kbit = 32KB
-    -Sector Size: 64KB (0x10000 bytes)
-    -Number of sectors: 2048
-    -Sector 0:         Start Address: 0x00000000     End Address: 0x0000FFFF
-    -Sector 2047:      Start Address: 0x0FFF0000     End Address: 0x0FFFFFFF
+    -Start Address: 0x0000     End Address: 0x7FFF
 -MODE_PIN pin for the MODE button are reserved for future use and do not currently have purpose
 -LED_MODE pin for the LED are reserved for future use and do not currently have purpose
 */
@@ -14,72 +12,69 @@ This sketch manages read/write requests from the NAS controller and interfaces w
 #include <E2B.h>
 #include <Adafruit_MCP23X17.h>
 
+#define memory_type 0x50
+#define memory_size 0x32
+#define memory_kb_or_mb 0x3
+
 #define E2B_pin 2
 #define MODE_PIN 12
 #define MODE_LED 11
 
-#define FLASH_CE A2
-#define FLASH_OE A3
-#define FLASH_WE A1
+#define EEPROM_CE A2
+#define EEPROM_OE A3
+#define EEPROM_WE A1
 
 unsigned char rom[8] = {FAMILYCODE, 0x45, 0xDD, 0x03, 0x00, 0x00, 0x11, 0x00};
 unsigned char scratchpad[9] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 const uint8_t DQ[8] = {10,9,8,3,4,5,6,7};
 const uint8_t adr[16] = {0,1,2,3,4,5,6,7,0,15,14,13,12,11,10,9};
-uint8_t ssd_status[4] = {0x0,0x0,0x0,0x0};    //Status bits, average service rate (integer, decimal), capacity
 
 uint16_t dataOutgoing;    //originally: int dataOutgoing
 String dataInString = "";
 uint8_t dataReceived[8];
 
+uint8_t statusBits = 0;
+int capacity = 12;                    //A percentage out of 100 (ex: capacity = 12 --> 12/100)
+
 float totalServiceRate = 1.0;
 float averageServiceRate = 1.0;
 int serviceRateSamples = 0;
-int capacity = 12;                    //A percentage out of 100 (ex: capacity = 12 --> 12/100)
-uint8_t intervalNum = 0;              //Tracks the number of received packets since the last status update
-const uint8_t intervalThreshold = 5; //Sets the number of packets received before updating the status bits
+float totalLoopTime = 1.0;
+float averageLoopTime = 1.0;
 
-Adafruit_MCP23X17 mcp1;
+uint8_t intervalNum = 0;              //Tracks the number of received packets since the last status update
+const uint8_t intervalThreshold = 5;  //Sets the number of packets received before updating the status bits
+
+Adafruit_MCP23X17 mcp;
 E2B e2b(E2B_pin);
 
 void setup(){
   attachInterrupt(E2B_pin,respond,CHANGE);
   Serial.begin(9600);
   while(!Serial);
-  Serial.println("Macchiato E2B SSD");
+  Serial.println("Macchiato E2B SSD - EEPROM");
   //randomSeed(analogRead(0));          //Uncomment when generating new rom address
   //e2b.generateROM(rom);               //Uncomment when generating new rom address
   e2b.init(rom);
   e2b.setScratchpad(scratchpad);
-  e2b.attachUserCommand(0x9F,sendStatus);
 
   Wire.setClock(100000);
 
   pinMode(MODE_PIN,INPUT_PULLUP);   //Nominally = 1, pushed = 0
   pinMode(MODE_LED, OUTPUT); digitalWrite(MODE_LED,LOW);
-  pinMode(FLASH_CE, OUTPUT); digitalWrite(FLASH_CE,HIGH);
-  pinMode(FLASH_OE, OUTPUT); digitalWrite(FLASH_OE,HIGH);
-  pinMode(FLASH_WE, OUTPUT); digitalWrite(FLASH_WE,HIGH);
+  pinMode(EEPROM_CE, OUTPUT); digitalWrite(EEPROM_CE,HIGH);
+  pinMode(EEPROM_OE, OUTPUT); digitalWrite(EEPROM_OE,HIGH);
+  pinMode(EEPROM_WE, OUTPUT); digitalWrite(EEPROM_WE,HIGH);
 
   //Initializes the IO expanders
-  if(!mcp1.begin_I2C(0x20)){
-    Serial.println("Error initializing MCP1.");
+  if(!mcp.begin_I2C(0x20)){
+    Serial.println("Error initializing MCP23017.");
     while(1);
   }
   for(uint8_t i=0; i < 16; i++){
-    mcp1.pinMode(i,OUTPUT);
+    mcp.pinMode(i,OUTPUT);
   }
-
-  /*Serial.print("Before Data at 0x15: "); Serial.println(ssd_read_flash(0x15),HEX);
-  delay(100);
-  ssd_write_flash(0x15,0xAA);
-  delay(100);
-  Serial.print("After Data at 0x15: "); Serial.println(ssd_read_flash(0x15),HEX);
-  delay(100);
-  ssd_write_flash(0x15,0x5C);
-  delay(100);
-  Serial.print("After Data at 0x15: "); Serial.println(ssd_read_flash(0x15),HEX);*/
 }
 
 void respond(){
@@ -97,7 +92,7 @@ void loop(){
 ////////////////////////////////////////////////SUPPORT FUNCTIONS///////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Handles switching through modes of operations via the MODE button
-void MODE_button_manager(){
+/*void MODE_button_manager(){
   if(!digitalRead(MODE_PIN)){
     int Tstart = 0;
     while(!digitalRead(MODE_PIN)){
@@ -111,40 +106,35 @@ void MODE_button_manager(){
       //Do other stuff
     }
   }
-}
+}*/
 
 //Updates the status of the SSD to be read by the NAS controller
-/*void update_status(){
+uint8_t update_status(){
   Serial.println("---------------------------------------------------------------------------------------------------------------");
   Serial.println("Updating status");
-  uint8_t statusBits = 0x0;
-  bitWrite(statusBits,0,mcp1.begin_I2C(0x20));
+  uint8_t statBits = 0x0;
+  bitWrite(statBits,0,mcp.begin_I2C(0x20));
   
   //Checks memory
   const uint8_t checkAddr = 20;
-  uint16_t checkDat = ssd_read_flash(checkAddr);
-  ssd_write_flash(checkAddr,0xC2);
-  bitWrite(statusBits,3,(bool)ssd_read_flash(checkAddr));
-  ssd_write_flash(checkAddr,checkDat);
+  uint16_t checkDat = ssd_read_eeprom(checkAddr);
+  ssd_write_eeprom(checkAddr,0xC2);
+  if(ssd_read_eeprom(checkAddr) == 0xC2){
+    bitWrite(statBits,1,1);
+  }else{
+    bitWrite(statBits,1,0);
+  }
+  ssd_write_eeprom(checkAddr,checkDat);
 
-  ssd_status[0] = statusBits;
-
-  int IntegerPart = (int)(averageServiceRate);
+  /*int IntegerPart = (int)(averageServiceRate);
   int DecimalPart = 100 * (averageServiceRate - IntegerPart);
   ssd_status[1] = IntegerPart;
-  ssd_status[2] = DecimalPart;
+  ssd_status[2] = DecimalPart;*/
 
-  //capacity = find_capacity();
-  capacity = 15;
-  ssd_status[3] = capacity;
-
-  Serial.print("Status bits: ");
-  for(int i=0; i < 4; i++){
-    Serial.print(ssd_status[i],BIN); Serial.print(" ");
-  }
-  Serial.println();
+  Serial.print("Status bits: "); Serial.println(statBits);
   Serial.println("---------------------------------------------------------------------------------------------------------------");
-}*/
+  return statBits;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////COMMUNICATIONS FUNCTIONS//////////////////////////////////////////////////
@@ -170,20 +160,22 @@ void handle_command(){
   }/*else{
     Serial.println("");
   }*/
-  //Reads/writes to the flash chip
+
+  //Reads/writes to the EEPROM chip
   if(dataE2B[0] == 0xA){         //Write
     uint8_t dataToWriteToMemory = dataE2B[5]; //dataE2B[5]<<8 | dataE2B[6];
-    ssd_write_flash(receivedAddress,dataToWriteToMemory);
-    e2b.scratchpad[7] = 0xFE;
+    ssd_write_eeprom(receivedAddress,dataToWriteToMemory);
     delay(10);
   }else if(dataE2B[0] == 0xB){   //Read
-    dataOutgoing = ssd_read_flash(receivedAddress);
-    //dataOutgoing = 0xAD72;
+    dataOutgoing = ssd_read_eeprom(receivedAddress);
     e2b.scratchpad[0] = lowByte(dataOutgoing);
     e2b.scratchpad[1] = 0;
-    e2b.scratchpad[5] = 0;
-    e2b.scratchpad[6] = 0;
-    e2b.scratchpad[7] = 0xFE;
+    e2b.scratchpad[2] = memory_type;
+    e2b.scratchpad[3] = memory_size;
+    e2b.scratchpad[5] = memory_kb_or_mb;
+    e2b.scratchpad[6] = statusBits;
+    e2b.scratchpad[7] = capacity;
+    e2b.scratchpad[8] = 0;
     e2b.setScratchpad(e2b.scratchpad);
   }
 
@@ -191,36 +183,24 @@ void handle_command(){
   totalServiceRate += runtime;
   serviceRateSamples++;
   averageServiceRate = totalServiceRate / serviceRateSamples;
+  averageLoopTime = totalLoopTime / serviceRateSamples;
 
   intervalNum++;
   if(intervalNum >= intervalThreshold){
     //update_status();
+    //capacity = find_capacity();
     intervalNum = 0;
   }
   //receive_status_update();
 }
 
-//Sends the status of the SSD to the NAS controller
-void sendStatus(){
-  e2b.sendData_async(rom,8);
-  e2b.sendData_async(ssd_status,4);
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////SSD INTERFACE FUNCTIONS////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//Prints the address onto the flash chip address lines
-/*void ssd_setAddress(uint32_t addr){
-  for (uint8_t i=0; i < 16; i++){
-    if(i != 8)
-      mcp1.digitalWrite(adr[i],bitRead(addr,i));
-  }
-}*/
+//Prints the address onto the EEPROM chip address lines
 void ssd_setAddress(uint16_t address) {
-    // --- Low byte: A0–A7 straight onto GPA0–GPA7 ---
-    mcp1.writeGPIOA(address & 0xFF);
+    mcp.writeGPIOA(address & 0xFF);
 
-    // --- High byte: A8–A14 mapped onto GPB7–GPB1 ---
     uint8_t highBits = (address >> 8) & 0x7F;  // only 7 bits
     uint8_t portB = 0;
 
@@ -231,14 +211,14 @@ void ssd_setAddress(uint16_t address) {
     if (highBits & (1 << 4)) portB |= (1 << 3); // A12 → GPB3
     if (highBits & (1 << 5)) portB |= (1 << 2); // A13 → GPB2
     if (highBits & (1 << 6)) portB |= (1 << 1); // A14 → GPB1
-    // GPB0 unused
+    // GPB0 is not connected
 
-    mcp1.writeGPIOB(portB);
+    mcp.writeGPIOB(portB);
 }
 
 
-//Reads a two-byte value at an address
-uint8_t ssd_read_flash(uint16_t address) {
+//Reads a byte of data from the EEPROM chip
+uint8_t ssd_read_eeprom(uint16_t address) {
     ssd_setAddress(address);
     delayMicroseconds(100); // allow MCP23017 to settle
 
@@ -247,26 +227,27 @@ uint8_t ssd_read_flash(uint16_t address) {
     }
     delayMicroseconds(10); // bus mode change settle
 
-    digitalWrite(FLASH_CE, LOW);
+    digitalWrite(EEPROM_CE, LOW);
     delayMicroseconds(10); // ensure CE stable before OE
-    digitalWrite(FLASH_OE, LOW);
+    digitalWrite(EEPROM_OE, LOW);
     delayMicroseconds(10); // allow EEPROM to present data
     uint8_t val = 0;
     for (uint8_t i = 0; i < 8; i++) {
       val |= (digitalRead(DQ[i]) << i);
     }
 
-    digitalWrite(FLASH_OE, HIGH);
+    digitalWrite(EEPROM_OE, HIGH);
     delayMicroseconds(10);
-    digitalWrite(FLASH_CE, HIGH);
+    digitalWrite(EEPROM_CE, HIGH);
     delayMicroseconds(10);
 
     return val;
 }
 
-void ssd_write_flash(uint16_t address, uint8_t data) {
+//Writes a byte of data to the EEPROM chip
+void ssd_write_eeprom(uint16_t address, uint8_t data) {
     ssd_setAddress(address);
-    delayMicroseconds(100); // allow MCP23017 to settle
+    delayMicroseconds(100);
 
     for (uint8_t i = 0; i < 8; i++) {
       pinMode(DQ[i], OUTPUT);
@@ -274,34 +255,33 @@ void ssd_write_flash(uint16_t address, uint8_t data) {
     }
     delayMicroseconds(10); // data bus settle
 
-    digitalWrite(FLASH_CE, LOW);
-    digitalWrite(FLASH_OE, HIGH);
-    digitalWrite(FLASH_WE, LOW);
+    digitalWrite(EEPROM_CE, LOW);
+    digitalWrite(EEPROM_OE, HIGH);
+    digitalWrite(EEPROM_WE, LOW);
     delayMicroseconds(10); // > tWP min
-    digitalWrite(FLASH_WE, HIGH);
+    digitalWrite(EEPROM_WE, HIGH);
     delayMicroseconds(10); // tDH data hold
-    digitalWrite(FLASH_CE, HIGH);
+    digitalWrite(EEPROM_CE, HIGH);
 
     // 4. Data Polling (section 6.4.1 in datasheet)
     uint8_t val;
     do {
-        val = ssd_read_flash(address);
+        val = ssd_read_eeprom(address);
     } while ((val & 0x80) != (data & 0x80)); // poll D7 until it matches
-    //delay(20); // tWC write cycle
 
     for (uint8_t i = 0; i < 8; i++) {
       pinMode(DQ[i], INPUT);
   }
-  delayMicroseconds(10); // let bus float
+  delayMicroseconds(10); // let the bus float
 }
 
-//Erases a whole sector of memory from the flash chip
-void ssd_erase_sector(uint16_t startAddr, uint16_t length) {
-  for (uint16_t addr = startAddr; addr < startAddr + length; addr++) {
-    ssd_write_flash(addr, 0xFF);
+//Function to find the capacity based on pin states
+int find_capacity(){
+  int num = 0;
+  for(int i=0; i < 0x7FFF; i++){
+    if(ssd_read_eeprom(i))
+      num++;
   }
+  num = num / 0x7FFF;
+  return round(num);
 }
-
-// Function to find the capacity based on pin states
-/*int find_capacity(){
-}*/

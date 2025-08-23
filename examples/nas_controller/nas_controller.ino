@@ -118,8 +118,6 @@ public:
       packetData[6] = highByte(dat);            // Data MSB
       packetData[7] = 0x00;                      // Reserved or checksum placeholder
       ///////////////////////////////////////////////////////////////////////////////////////////////////
-      //Searches for device
-      //This section is not needed if only one device is connected
 
       int checksum = 0;
       for (uint8_t i=0; i < 8; i++) {
@@ -152,7 +150,7 @@ public:
         Serial.print("Data = "); //Serial.print("\t\tData = ");
         Serial.print(present, HEX);
         Serial.print(" ");
-        for (i=0; i < 2; i++) {           // we only need 2 bytes
+        for (i=0; i < 9; i++) {           // we only need 2 bytes
           data[i] = e2b.read();
           Serial.print(data[i], HEX);
           Serial.print(" ");
