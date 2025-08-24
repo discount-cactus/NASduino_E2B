@@ -6,18 +6,12 @@ device connected to the NAS via ESP-NOW which is also an ESP32 (for simplicity)
 */
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/*TO-DO:
--Update _connectedDevices to make sure there's no missing devices that should be there
-*/
-
 #include <E2B.h>
 #include "ESP32_NOW.h"
 #include "WiFi.h"
 #include <esp_mac.h>  // For the MAC2STR and MACSTR macros
 #include <vector>
 #include "EEPROM.h"
-#include <Wire.h>
-#include <Adafruit_INA219.h>
 
 #define E2B_pin 4
 #define ESPNOW_WIFI_CHANNEL 6
@@ -25,7 +19,6 @@ device connected to the NAS via ESP-NOW which is also an ESP32 (for simplicity)
 #define MaxConnectedDeviceNum 12
 
 #define cmd_delay 200
-#define fanEnable 1
 
 // Define the structure to hold the data
 struct DataPacket {
@@ -46,14 +39,12 @@ uint8_t packetData[8];
 uint8_t _connectedDevices[MaxConnectedDeviceNum][8];
 uint8_t _previousDevices[MaxConnectedDeviceNum][8];
 
-bool isPerformingMarlinCommand = 0;
 uint8_t connectedMasterNodes = 0;
 float averageArrivalRate = 0.0;
 uint8_t fanState = 0;
 int fanPin = 7;
 
 E2B e2b(E2B_pin);  // on pin 4 (a 4.7K resistor is necessary)
-Adafruit_INA219 ina219;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////ESP-NOW FUNCTIONS////////////////////////////////////////////////
@@ -83,7 +74,7 @@ public:
   // Callback to handle receiving data
   void onReceive(const uint8_t *data, size_t len, bool broadcast) {
     int i;
-    if ((len == sizeof(DataPacket)) && (!isPerformingMarlinCommand)){
+    if (len == sizeof(DataPacket)){
       DataPacket *packet = (DataPacket *)data;
       //Serial.printf("Received a message from master " MACSTR " (%s)\n", MAC2STR(addr()), broadcast ? "broadcast" : "unicast");
       Serial.println("Received a message from master");
@@ -243,10 +234,6 @@ void setup(){
 
 void loop(){
   button_manager();
-  if (Serial.available() > 0){
-    marlin_command_manager();
-  }
-  fan_manager();
 }
 
 
@@ -412,135 +399,5 @@ void print_connected_devices(){
       Serial.print(_connectedDevices[i][j],HEX); Serial.print(" ");
     }
     Serial.println();
-  }
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////MARLIN UI FUNCTIONS///////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
-//Handles commands being received by Marlin UI
-void marlin_command_manager(){
-  isPerformingMarlinCommand = 1;
-  char receivedChar = Serial.read();
-  if(receivedChar == 'A'){
-    run_diagnostics();
-  } else if(receivedChar == 'B'){
-    run_speedtest();
-  } else if(receivedChar == 'C'){
-    find_capacity();
-  } else if(receivedChar == '0'){
-    if(fanEnable){
-      if(fanState == 0){
-        fanState = 4;
-        Serial.write("1");
-      }else{
-        fanState = 0;
-        Serial.write("0");
-      }
-    }
-  } else if(receivedChar == '1'){
-    if(fanEnable){
-      fanState = 1;
-    }
-  } else if(receivedChar == '2'){
-    if(fanEnable){
-      fanState = 2;
-    }
-  } else if(receivedChar == '3'){
-    if(fanEnable){
-      fanState = 3;
-    }
-  } else {
-    Serial.println("Unknown command");
-  }
-  isPerformingMarlinCommand = 0;
-}
-
-// Empty function for diagnostics (you can add your own code here later)
-void run_diagnostics() {
-  String dataToSend = "";
-
-  dataToSend += String(connectedMasterNodes);
-  dataToSend += ",";
-  dataToSend += String(ina219.begin()); //may need to add its I2C address (0x40)
-  dataToSend += ",";
-  dataToSend += String(fanEnable);
-  dataToSend += ",";
-  dataToSend += String(averageArrivalRate);
-  /*dataToSend += ",";
-  dataToSend += String();
-  dataToSend += ",";
-  dataToSend += String();
-  dataToSend += ",";*/
-
-  //ADD MASTER DIAGNOSTICS TO THIS
-
-  //Adds SSD diagnostics to string
-  byte data[9];
-  byte addr[8];
-  if(!e2b.search(addr)){
-    Serial.println("No more addresses.");
-    Serial.println();
-    e2b.reset_search();
-    delay(250);
-    return;
-  }
-  
-  /*Serial.print("ROM =");
-  for( i = 0; i < 8; i++) {
-    Serial.write(' ');
-    Serial.print(addr[i], HEX);
-  }*/
-
-  byte present = e2b.reset();
-  e2b.select(addr);    
-  e2b.write(0x9F);         // Read Scratchpad
-
-  //Serial.print("  Data = ");
-  //Serial.print(present, HEX);
-  //Serial.print(" ");
-  for(byte i=0; i < 12; i++) {           // we need 12 bytes
-    data[i] = e2b.read();
-    //Serial.print(data[i], HEX);
-    //Serial.print(" ");
-    dataToSend += String(data[i]);
-    dataToSend += ",";
-  }
-
-  Serial.println(dataToSend);
-}
-
-//Runs a test to determine how fast the transfer speeds are
-void run_speedtest(){
-  delay(6000);
-  Serial.write("Groovy,6.74 kb/s, 5.21 kb/s,1,1,0,4");
-}
-
-//Finds the capacity of each SSD
-void find_capacity(){
-  delay(3000);  // Simulate computation
-  Serial.write("0.2164\n");  // Adding \n to indicate end of message
-}
-
-//Manages operation of on-board fan (when connected)
-void fan_manager(){
-  if(fanEnable){
-    switch(fanState){
-      case 0:
-        digitalWrite(fanPin,LOW);
-        break;
-      case 1:
-        digitalWrite(fanPin,HIGH);
-        break;
-      case 2:
-        digitalWrite(fanPin,LOW);
-        break;
-      case 3:
-        digitalWrite(fanPin,HIGH);
-        break;
-      case 4:
-        digitalWrite(fanPin,LOW);
-        break;
-    }
   }
 }
