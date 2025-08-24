@@ -1,6 +1,8 @@
 # NASduino (E2B)
 NASduino is a simple Arduino-based NAS for enabling small-scale projects to access large amounts of data in a simple and scalable manner. This is made capable through my single-wire communications protocol E2B.
 
+To access the Macchiato SSD board files: https://github.com/discount-cactus/macchiato-ssd
+
 ## Required materials
 - 2 x ESP32's
 - 1-12 x Macchiato SSD's
