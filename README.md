@@ -22,6 +22,8 @@ The default NAS setup uses two ESP32's (along with the SSD board I developed) us
 - Macchiato SSD:
     - E2B pin: Connected to E2B pin and pin 4 on NAS Controller device
 
+![IMG_4519](https://github.com/user-attachments/assets/60afe3c4-04d1-43ca-86bc-4400340e433d)
+
 # DAS
 The DAS uses almost the same setup as the NAS wiring, with the absence of one ESP32 while the other one now assumes the role of the host and NAS controller.
 
