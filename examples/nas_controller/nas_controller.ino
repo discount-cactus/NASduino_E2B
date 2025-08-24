@@ -87,13 +87,6 @@ public:
       Serial.print("_ADR: "); Serial.println(adr);
       Serial.print("_DAT: "); Serial.println(dat,HEX);*/
       ///////////////////////////////////////////////////////////////////////////////////////////////////
-      //Determines if the instruction is to read or write
-      /*if(wr == 0xA)
-        ssd_write(pn,adr,dat);
-      if(wr == 0xB)
-        uint16_t response = ssd_read(pn,adr);
-        //Serial.print("response: "); Serial.println(response,HEX);
-        send_message((uint8_t *)&response, sizeof(response));*/
       if(wr != 0xA && wr != 0xB)
         return;
 
