@@ -35,6 +35,7 @@ const uint8_t DQ[16] = {10,9,8,7,6,5,4,3,0,1,MODE_LED,A3,A2,A1,A0,13};
 uint16_t dataOutgoing;    //originally: int dataOutgoing
 String dataInString = "";
 uint8_t dataReceived[8];
+uint8_t readwrite_index = 0;
 
 uint8_t statusBits = 0;
 int capacity = 12;                    //A percentage out of 100 (ex: capacity = 12 --> 12/100)
@@ -185,33 +186,45 @@ void handle_command(){
   //Reads/writes to the SRAM chip
   if(dataE2B[0] == 0xA){         //Write
     if((dataE2B[5] == 0) || (dataE2B[6] == 0)){
+      //Byte write
       if(dataE2B[5] == 0){
         uint8_t dataToWriteToMemory = dataE2B[6];
         ssd_write_sram_byte(receivedAddress,dataToWriteToMemory,SRAM_UB);
+        readwrite_index = 6;
       }else{
         uint8_t dataToWriteToMemory = dataE2B[5];
         ssd_write_sram_byte(receivedAddress,dataToWriteToMemory,SRAM_LB);
+        readwrite_index = 5;
       }
     }else{
+      //Word write
       uint16_t dataToWriteToMemory = dataE2B[5]<<8 | dataE2B[6];
       ssd_write_sram_word(receivedAddress,dataToWriteToMemory);
+      readwrite_index = 2;
     }
     delay(10);
   }else if(dataE2B[0] == 0xB){   //Read
-  if((dataE2B[5] == 0) || (dataE2B[6] == 0)){
-      if(dataE2B[5] == 0){
+    if(readwrite_index != 2){
+    //if((dataE2B[5] == 0) || (dataE2B[6] == 0)){
+      //Byte read
+      //if(dataE2B[5] == 0){
+      if(readwrite_index == 6){
         dataOutgoing = ssd_read_sram_byte(receivedAddress,SRAM_UB);
         e2b.scratchpad[0] = 0;
         e2b.scratchpad[1] = highByte(dataOutgoing);
+        readwrite_index = 0;
       }else{
         dataOutgoing = ssd_read_sram_byte(receivedAddress,SRAM_LB);
         e2b.scratchpad[0] = lowByte(dataOutgoing);
         e2b.scratchpad[1] = 0;
+        readwrite_index = 0;
       }
     }else{
+      //Word read
       dataOutgoing = ssd_read_sram_word(receivedAddress);
       e2b.scratchpad[0] = lowByte(dataOutgoing);
       e2b.scratchpad[1] = highByte(dataOutgoing);
+      readwrite_index = 0;
     }
     e2b.scratchpad[2] = memory_type;
     e2b.scratchpad[3] = memory_size;
@@ -307,7 +320,7 @@ uint8_t ssd_read_sram_byte(uint32_t address, uint8_t byteSelect){
     return val;
 }
 
-//Reads a byte of data from the SRAM chip
+//Reads a word of data from the SRAM chip
 uint16_t ssd_read_sram_word(uint32_t address){
     ssd_setAddress(address);
     delayMicroseconds(100); // allow MCP23017 to settle
