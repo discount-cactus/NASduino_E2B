@@ -198,7 +198,7 @@ void handle_command(){
       }
     }else{
       //Word write
-      uint16_t dataToWriteToMemory = dataE2B[5]<<8 | dataE2B[6];
+      uint16_t dataToWriteToMemory = dataE2B[5] <<8 | dataE2B[6];
       ssd_write_sram_word(receivedAddress,dataToWriteToMemory);
       readwrite_index = 2;
     }
@@ -253,12 +253,13 @@ void handle_command(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Prints the address onto the SRAM chip address lines
 void ssd_setAddress(uint16_t address){
-  uint8_t mcp1_address[19] = {3,2,1,0,0,1,2,3,8,9,10,11,12,13,14,15,4,5,6};
+  uint8_t mcp_address[19] = {3,2,1,0,0,1,2,3,8,9,10,11,12,13,14,15,4,5,6};
   for (uint8_t i = 0; i < 19; i++) {
-    if((i < 4) && (i > 7)){
-      mcp1.digitalWrite(mcp1_address[i],bitRead(address,i));
+    //if((i < 4) && (i > 7)){
+    if (i < 8 || i >= 16) {
+      mcp1.digitalWrite(mcp_address[i],bitRead(address,i));
     }else{
-      mcp2.digitalWrite(mcp1_address[i],bitRead(address,i));
+      mcp2.digitalWrite(mcp_address[i],bitRead(address,i));
     }
   }
 

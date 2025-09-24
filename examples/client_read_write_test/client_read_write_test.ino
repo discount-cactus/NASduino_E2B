@@ -15,8 +15,12 @@ struct DataPacket {
   uint8_t _PORTNUM;   // Byte variable for port number
   uint8_t _WR;        // Byte variable for WR
   int _ADR;           // Integer variable for address
-  uint8_t _DAT;      // uint16_t variable for data
+  uint8_t _DAT;       // uint8_t variable for data
+  uint8_t _DAT2;      // uint8_t variable for data 2
 };
+
+uint8_t queriedData = 0x00;
+uint8_t queriedData2 = 0x00;
 
 class ESP_NOW_Client_Peer : public ESP_NOW_Peer {
 public:
@@ -58,11 +62,18 @@ void onReceive(const esp_now_recv_info_t *info, const uint8_t *data, int len){
   if (len == sizeof(uint8_t)) {
     received = data[0];
     //Serial.printf("Received response: 0x%04X\n", received);
+
+    if(queriedData == 0x0){
+      queriedData = received;
+      Serial.println(queriedData,HEX);
+    }else{
+      queriedData2 = received;
+      Serial.println(queriedData2,HEX);
+    }
   }else{
     // If the received data is not the expected size, print an error
     Serial.println("Error: Received data of unexpected size.");
   }
-  Serial.println(received,HEX);
 }
 
 void setup() {
@@ -92,25 +103,36 @@ void setup() {
 }
 
 void loop(){
-  query_nas_write(0,17,0x62);
+  query_nas_write(0,17,0xB9);
   delay(500);
+  clear_buffer();
   query_nas_read(0,17);
   delay(500);
 }
 
 
 //Writes to the NAS
-void query_nas_write(uint8_t port, int address, uint8_t dat){
+void query_nas_write(uint8_t port, int address, uint16_t dat){
   // Prepare the data to send
   DataPacket packet;
   packet._PORTNUM = port;    // Example port number
   packet._WR = 0xA;         // Example WR value (write command)
   packet._ADR = address; // Example address (integer)
-  packet._DAT = dat;   // Example data (uint8_t)
+
+  if(lowByte(dat) == 0x0 || highByte(dat) == 0x0){
+    if(lowByte(dat) == 0x0){
+      packet._DAT = dat = highByte(dat);
+    }else{
+      packet._DAT = dat = lowByte(dat);
+    }
+  }else{
+    packet._DAT = highByte(dat);   // Example data (uint8_t)
+    packet._DAT2 = lowByte(dat);   // Example data (uint8_t)
+  }
 
   // Print the message being sent for debugging
-  Serial.printf("Broadcasting message: Port: %d, WR: %d, ADR: %d, DAT: %u\n", 
-                packet._PORTNUM, packet._WR, packet._ADR, packet._DAT);
+  Serial.printf("Broadcasting message: Port: %d, WR: %d, ADR: %d, DAT: %u, DAT2: %u\n", 
+                packet._PORTNUM, packet._WR, packet._ADR, packet._DAT, packet._DAT2);
 
   // Send the message
   if (!broadcast_peer.send_message((uint8_t *)&packet, sizeof(packet))) {
@@ -122,17 +144,23 @@ void query_nas_write(uint8_t port, int address, uint8_t dat){
 void query_nas_read(uint8_t port, int address){
   // Prepare the data to send
   DataPacket packet;
-  packet._PORTNUM = port;    // Example port number
+  packet._PORTNUM = port;   // Example port number
   packet._WR = 0xB;         // Example WR value (write command)
-  packet._ADR = address; // Example address (integer)
-  packet._DAT = 0x0000;   // Example data (uint16_t)
+  packet._ADR = address;    // Example address (integer)
+  packet._DAT = 0x00;       // Example data (uint8_t)
+  packet._DAT2 = 0x00;      // Example data (uint8_t)
 
   // Print the message being sent for debugging
-  Serial.printf("Broadcasting message: Port: %d, WR: %d, ADR: %d, DAT: %u\n", 
-                packet._PORTNUM, packet._WR, packet._ADR, packet._DAT);
+  Serial.printf("Broadcasting message: Port: %d, WR: %d, ADR: %d, DAT: %u, DAT2: %u\n", 
+                packet._PORTNUM, packet._WR, packet._ADR, packet._DAT, packet._DAT2);
 
   // Send the message
   if (!broadcast_peer.send_message((uint8_t *)&packet, sizeof(packet))) {
     Serial.println("Failed to broadcast message");
   }
+}
+
+void clear_buffer(){
+  queriedData = 0x00;
+  queriedData2 = 0x00;
 }

@@ -25,7 +25,8 @@ struct DataPacket {
   uint8_t _PORTNUM;   // Byte variable for port number
   uint8_t _WR;        // Byte variable for WR
   int _ADR;           // Integer variable for address
-  uint8_t _DAT;      // uint16_t variable for data
+  uint8_t _DAT;       // uint16_t variable for data
+  uint8_t _DAT2;      // uint16_t variable for data 2
 };
 
 unsigned char rom[8] = {FAMILYCODE, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x11, 0x00};
@@ -33,7 +34,8 @@ unsigned char scratchpad[9] = {0x00, 0x00, 0x4B, 0x46, 0x7F, 0xFF, 0x00, 0x10, 0
 uint8_t pn;
 uint8_t wr;
 int adr;
-uint16_t dat;
+uint8_t dat;
+uint8_t dat2;
 uint8_t packetData[8];
 
 uint8_t _connectedDevices[MaxConnectedDeviceNum][8];
@@ -82,6 +84,7 @@ public:
       wr = packet->_WR;
       adr = packet->_ADR;
       dat = packet->_DAT;
+      dat2 = packet->_DAT2;
       /*Serial.print("_PORTNUM: "); Serial.println(pn);
       Serial.print("_WR: "); Serial.println(wr,HEX);
       Serial.print("_ADR: "); Serial.println(adr);
@@ -91,15 +94,11 @@ public:
         return;
 
       packetData[0] = wr;                        // Command: 0xA = write, 0xB = read
-      packetData[1] = adr & 0xFF;                // LSB
-      packetData[2] = (adr >> 8) & 0xFF;
-      packetData[3] = (adr >> 16) & 0xFF;
-      packetData[4] = (adr >> 24) & 0xFF;        // MSB
       for (i=0; i < 4; i++) {                     //Encodes the address into 4 bytes
         packetData[i + 1] = (adr >> (i * 8)) & 0xFF;  //packetData[i] = (adr >> (i * 8)) & 0xFF;  // Extract each byte
       }
-      packetData[5] = lowByte(dat);             // Data LSB
-      packetData[6] = highByte(dat);            // Data MSB
+      packetData[5] = dat;             // Data LSB
+      packetData[6] = dat2; //highByte(dat);            // Data MSB
       packetData[7] = 0x00;                      // Reserved or checksum placeholder
       ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -146,6 +145,10 @@ public:
         uint8_t response = data[0];
         //Serial.print("response: "); Serial.println(response,HEX);
         send_message((uint8_t *)&response, sizeof(response));
+        delay(5);
+        response = data[1];
+        if(response != 0x0)
+          send_message((uint8_t *)&response, sizeof(response));
       }
 
       delay(cmd_delay);
