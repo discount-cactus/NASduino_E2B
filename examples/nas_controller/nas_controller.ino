@@ -117,7 +117,7 @@ public:
       e2b.write_scratchpad();
       for(i=0; i < 8; i++){
         e2b.write(packetData[i]);
-        Serial.print(packetData[i]); Serial.print(" ");
+        Serial.print(packetData[i],HEX); Serial.print(" ");
       }
       Serial.println(" ");
       
@@ -130,10 +130,10 @@ public:
         e2b.select(_connectedDevices[pn]);
         e2b.read_scratchpad();
 
-        Serial.print("Data = "); //Serial.print("\t\tData = ");
+        Serial.print("Data = ");
         Serial.print(present, HEX);
         Serial.print(" ");
-        for (i=0; i < 9; i++) {           // we only need 2 bytes
+        for (i=0; i < 9; i++) {           // we only need 2 bytes, 9 shows the whole response packet
           data[i] = e2b.read();
           Serial.print(data[i], HEX);
           Serial.print(" ");
@@ -145,10 +145,11 @@ public:
         uint8_t response = data[0];
         //Serial.print("response: "); Serial.println(response,HEX);
         send_message((uint8_t *)&response, sizeof(response));
-        delay(5);
         response = data[1];
-        if(response != 0x0)
+        if(response != 0x0){
+          delay(5);                 //Probably not required
           send_message((uint8_t *)&response, sizeof(response));
+        }
       }
 
       delay(cmd_delay);

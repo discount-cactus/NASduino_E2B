@@ -30,7 +30,6 @@ unsigned char rom[8] = {FAMILYCODE, 0x45, 0xDD, 0x03, 0x00, 0x00, 0x11, 0x00};
 unsigned char scratchpad[9] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 const uint8_t DQ[16] = {10,9,8,7,6,5,4,3,0,1,MODE_LED,A3,A2,A1,A0,13};
-//const uint8_t adr[16] = {0,1,2,3,4,5,6,7,0,15,14,13,12,11,10,9};
 
 uint16_t dataOutgoing;    //originally: int dataOutgoing
 String dataInString = "";
@@ -87,6 +86,7 @@ void setup(){
   mcp2.pinMode(SRAM_LB, OUTPUT); mcp2.digitalWrite(SRAM_LB,HIGH);
   mcp2.pinMode(SRAM_UB, OUTPUT); mcp2.digitalWrite(SRAM_UB,HIGH);
 
+  Serial.println("-----------------------------------------------------------------------------------");
   //uint8_t dataTest = 0x4C;
   uint16_t dataTest = 0x3DA8;
   Serial.print("Data written to SRAM chip: 0x"); Serial.println(dataTest,HEX);
@@ -97,6 +97,7 @@ void setup(){
   //Serial.print("Data read from SRAM chip: 0x"); Serial.println(ssd_read_sram_byte(15,SRAM_LB),HEX);
   //Serial.print("Data read from SRAM chip: 0x"); Serial.println(ssd_read_sram_byte(15,SRAM_UB),HEX);
   Serial.print("Data read from SRAM chip: 0x"); Serial.println(ssd_read_sram_word(15),HEX);
+  Serial.println("-----------------------------------------------------------------------------------");
 }
 
 void respond(){
@@ -185,6 +186,7 @@ void handle_command(){
 
   //Reads/writes to the SRAM chip
   if(dataE2B[0] == 0xA){         //Write
+    //Serial.print(dataE2B[5],HEX); Serial.print(" "); Serial.println(dataE2B[6],HEX);
     if((dataE2B[5] == 0) || (dataE2B[6] == 0)){
       //Byte write
       if(dataE2B[5] == 0){
@@ -289,145 +291,145 @@ void ssd_setAddress(uint16_t address){
 
 //Reads a byte of data from the SRAM chip
 uint8_t ssd_read_sram_byte(uint32_t address, uint8_t byteSelect){
-    ssd_setAddress(address);
-    delayMicroseconds(100); // allow MCP23017 to settle
+  ssd_setAddress(address);
+  delayMicroseconds(100); // allow MCP23017 to settle
 
-    for (uint8_t i = 0; i < 16; i++) {
-      pinMode(DQ[i], INPUT);
-    }
-    delayMicroseconds(10); // bus mode change settle
+  for (uint8_t i = 0; i < 16; i++) {
+    pinMode(DQ[i], INPUT);
+  }
+  delayMicroseconds(10); // bus mode change settle
 
-    mcp2.digitalWrite(SRAM_CE, LOW);
-    delayMicroseconds(10); // ensure CE stable before OE
-    mcp2.digitalWrite(SRAM_OE, LOW);
-    delayMicroseconds(10);
-    mcp1.digitalWrite(SRAM_WE, HIGH);
-    delayMicroseconds(10);
-    mcp2.digitalWrite(byteSelect, LOW);
-    delayMicroseconds(10); // allow SRAM to present data
+  mcp2.digitalWrite(SRAM_CE, LOW);
+  delayMicroseconds(10); // ensure CE stable before OE
+  mcp2.digitalWrite(SRAM_OE, LOW);
+  delayMicroseconds(10);
+  mcp1.digitalWrite(SRAM_WE, HIGH);
+  delayMicroseconds(10);
+  mcp2.digitalWrite(byteSelect, LOW);
+  delayMicroseconds(10); // allow SRAM to present data
 
-    uint8_t val = 0;
-    for (uint8_t i = 0; i < 16; i++) {
-      val |= (digitalRead(DQ[i]) << i);
-    }
+  uint8_t val = 0;
+  for (uint8_t i = 0; i < 8; i++) {
+    val |= (digitalRead(DQ[i]) << i);
+  }
 
-    mcp2.digitalWrite(SRAM_OE, HIGH);
-    delayMicroseconds(10);
-    mcp2.digitalWrite(SRAM_CE, HIGH);
-    delayMicroseconds(10);
-    mcp2.digitalWrite(byteSelect, HIGH);
-    delayMicroseconds(10);
+  mcp2.digitalWrite(SRAM_OE, HIGH);
+  delayMicroseconds(10);
+  mcp2.digitalWrite(SRAM_CE, HIGH);
+  delayMicroseconds(10);
+  mcp2.digitalWrite(byteSelect, HIGH);
+  delayMicroseconds(10);
 
-    return val;
+  return val;
 }
 
 //Reads a word of data from the SRAM chip
 uint16_t ssd_read_sram_word(uint32_t address){
-    ssd_setAddress(address);
-    delayMicroseconds(100); // allow MCP23017 to settle
+  ssd_setAddress(address);
+  delayMicroseconds(100); // allow MCP23017 to settle
 
-    for (uint8_t i=0; i < 16; i++) {
-      pinMode(DQ[i], INPUT);
-    }
-    delayMicroseconds(10); // bus mode change settle
+  for (uint8_t i=0; i < 16; i++) {
+    pinMode(DQ[i], INPUT);
+  }
+  delayMicroseconds(20); // bus mode change settle
 
-    mcp2.digitalWrite(SRAM_CE, LOW);
-    delayMicroseconds(10); // ensure CE stable before OE
-    mcp2.digitalWrite(SRAM_OE, LOW);
-    delayMicroseconds(10);
-    mcp1.digitalWrite(SRAM_WE, HIGH);
-    delayMicroseconds(10);
-    mcp2.digitalWrite(SRAM_LB, LOW);
-    delayMicroseconds(10);
-    mcp2.digitalWrite(SRAM_UB, LOW);
-    delayMicroseconds(10); // allow SRAM to present data
+  mcp2.digitalWrite(SRAM_CE, LOW);
+  delayMicroseconds(10); // ensure CE stable before OE
+  mcp2.digitalWrite(SRAM_OE, LOW);
+  delayMicroseconds(10);
+  mcp1.digitalWrite(SRAM_WE, HIGH);
+  delayMicroseconds(10);
+  mcp2.digitalWrite(SRAM_LB, LOW);
+  delayMicroseconds(10);
+  mcp2.digitalWrite(SRAM_UB, LOW);
+  delayMicroseconds(10); // allow SRAM to present data
 
-    uint16_t val = 0;
-    for (uint8_t i=0; i < 16; i++) {
-      val |= (digitalRead(DQ[i]) << i);
-    }
+  uint16_t val = 0;
+  for (uint8_t i=0; i < 16; i++) {
+    val |= (digitalRead(DQ[i]) << i);
+  }
 
-    mcp2.digitalWrite(SRAM_OE, HIGH);
-    delayMicroseconds(10);
-    mcp2.digitalWrite(SRAM_CE, HIGH);
-    delayMicroseconds(10);
-    mcp2.digitalWrite(SRAM_LB, HIGH);
-    delayMicroseconds(10);
-    mcp2.digitalWrite(SRAM_UB, HIGH);
-    delayMicroseconds(10);
+  mcp2.digitalWrite(SRAM_OE, HIGH);
+  delayMicroseconds(10);
+  mcp2.digitalWrite(SRAM_CE, HIGH);
+  delayMicroseconds(10);
+  mcp2.digitalWrite(SRAM_LB, HIGH);
+  delayMicroseconds(10);
+  mcp2.digitalWrite(SRAM_UB, HIGH);
+  delayMicroseconds(10);
 
-    return val;
+  return val;
 }
 
 //Writes a byte of data to the SRAM chip
 void ssd_write_sram_byte(uint32_t address, uint8_t data, uint8_t byteSelect){
-    ssd_setAddress(address);
-    delayMicroseconds(100);
+  ssd_setAddress(address);
+  delayMicroseconds(100);
 
-    for (uint8_t i = 0; i < 8; i++) {
-      pinMode(DQ[i], OUTPUT);
-      digitalWrite(DQ[i], bitRead(data, i));
-    }
-    delayMicroseconds(10); // data bus settle
-
-    mcp2.digitalWrite(SRAM_CE, LOW);
-    mcp2.digitalWrite(SRAM_OE, HIGH);
-    mcp2.digitalWrite(byteSelect, LOW);
-    mcp1.digitalWrite(SRAM_WE, LOW);
-
-    delayMicroseconds(10); // > tWP min
-
-    mcp1.digitalWrite(SRAM_WE, HIGH);
-    mcp2.digitalWrite(SRAM_CE, HIGH);
-    mcp2.digitalWrite(byteSelect, HIGH);
-
-    // 4. Data Polling (section 6.4.1 in datasheet)
-    /*uint8_t val;
-    do {
-        val = ssd_read_sram_byte(address);
-    } while ((val & 0x80) != (data & 0x80)); // poll D7 until it matches*/
-
-    for (uint8_t i = 0; i < 8; i++) {
-      pinMode(DQ[i], INPUT);
+  for (uint8_t i=0; i < 16; i++) {
+    pinMode(DQ[i], OUTPUT);
+    digitalWrite(DQ[i], bitRead(data, i));
   }
-  delayMicroseconds(10); // let the bus float
+  delayMicroseconds(10); // data bus settle
+
+  mcp2.digitalWrite(SRAM_CE, LOW);
+  mcp2.digitalWrite(SRAM_OE, HIGH);
+  mcp2.digitalWrite(byteSelect, LOW);
+  mcp1.digitalWrite(SRAM_WE, LOW);
+
+  delayMicroseconds(10); // > tWP min
+
+  mcp1.digitalWrite(SRAM_WE, HIGH);
+  mcp2.digitalWrite(SRAM_CE, HIGH);
+  mcp2.digitalWrite(byteSelect, HIGH);
+
+  // 4. Data Polling (section 6.4.1 in datasheet)
+  /*uint8_t val;
+  do {
+      val = ssd_read_sram_byte(address);
+  } while ((val & 0x80) != (data & 0x80)); // poll D7 until it matches*/
+
+  for (uint8_t i=0; i < 8; i++) {
+    pinMode(DQ[i], INPUT);
+}
+delayMicroseconds(10); // let the bus float
 }
 
 //Writes a word of data to the SRAM chip
 void ssd_write_sram_word(uint32_t address, uint16_t data){
-    ssd_setAddress(address);
-    delayMicroseconds(100);
+  ssd_setAddress(address);
+  delayMicroseconds(100);
 
-    for (uint8_t i = 0; i < 16; i++) {
-      pinMode(DQ[i], OUTPUT);
-      digitalWrite(DQ[i], bitRead(data, i));
-    }
-    delayMicroseconds(10); // data bus settle
-
-    mcp2.digitalWrite(SRAM_CE, LOW);
-    mcp2.digitalWrite(SRAM_OE, HIGH);
-    mcp2.digitalWrite(SRAM_LB, LOW);
-    mcp2.digitalWrite(SRAM_UB, LOW);
-    mcp1.digitalWrite(SRAM_WE, LOW);
-
-    delayMicroseconds(10); // > tWP min
-
-    mcp1.digitalWrite(SRAM_WE, HIGH);
-    //delayMicroseconds(10); // tDH data hold
-    mcp2.digitalWrite(SRAM_CE, HIGH);
-    mcp2.digitalWrite(SRAM_LB, HIGH);
-    mcp2.digitalWrite(SRAM_UB, HIGH);
-
-    // 4. Data Polling (section 6.4.1 in datasheet)
-    /*uint8_t val;
-    do {
-        val = ssd_read_sram_byte(address);
-    } while ((val & 0x80) != (data & 0x80)); // poll D7 until it matches*/
-
-    for (uint8_t i = 0; i < 16; i++) {
-      pinMode(DQ[i], INPUT);
+  for (uint8_t i=0; i < 16; i++) {
+    pinMode(DQ[i], OUTPUT);
+    digitalWrite(DQ[i], bitRead(data, i));
   }
-  delayMicroseconds(10); // let the bus float
+  delayMicroseconds(20); // data bus settle
+
+  mcp2.digitalWrite(SRAM_CE, LOW);
+  mcp2.digitalWrite(SRAM_OE, HIGH);
+  mcp2.digitalWrite(SRAM_LB, LOW);
+  mcp2.digitalWrite(SRAM_UB, LOW);
+  mcp1.digitalWrite(SRAM_WE, LOW);
+
+  delayMicroseconds(10); // > tWP min
+
+  mcp1.digitalWrite(SRAM_WE, HIGH);
+  //delayMicroseconds(10); // tDH data hold
+  mcp2.digitalWrite(SRAM_CE, HIGH);
+  mcp2.digitalWrite(SRAM_LB, HIGH);
+  mcp2.digitalWrite(SRAM_UB, HIGH);
+
+  // 4. Data Polling (section 6.4.1 in datasheet)
+  /*uint8_t val;
+  do {
+      val = ssd_read_sram_byte(address);
+  } while ((val & 0x80) != (data & 0x80)); // poll D7 until it matches*/
+
+  for (uint8_t i=0; i < 16; i++) {
+    pinMode(DQ[i], INPUT);
+}
+delayMicroseconds(10); // let the bus float
 }
 
 //Function to find the capacity based on pin states

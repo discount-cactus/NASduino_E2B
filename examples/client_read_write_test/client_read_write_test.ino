@@ -103,7 +103,7 @@ void setup() {
 }
 
 void loop(){
-  query_nas_write(0,17,0xB9);
+  query_nas_write(0,17,0xE0D4);
   delay(500);
   clear_buffer();
   query_nas_read(0,17);
@@ -122,8 +122,10 @@ void query_nas_write(uint8_t port, int address, uint16_t dat){
   if(lowByte(dat) == 0x0 || highByte(dat) == 0x0){
     if(lowByte(dat) == 0x0){
       packet._DAT = dat = highByte(dat);
+      packet._DAT2 = 0x00;
     }else{
       packet._DAT = dat = lowByte(dat);
+      packet._DAT2 = 0x00;
     }
   }else{
     packet._DAT = highByte(dat);   // Example data (uint8_t)
