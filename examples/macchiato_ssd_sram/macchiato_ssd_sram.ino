@@ -420,12 +420,6 @@ void ssd_write_sram_word(uint32_t address, uint16_t data){
   mcp2.digitalWrite(SRAM_LB, HIGH);
   mcp2.digitalWrite(SRAM_UB, HIGH);
 
-  // 4. Data Polling (section 6.4.1 in datasheet)
-  /*uint8_t val;
-  do {
-      val = ssd_read_sram_byte(address);
-  } while ((val & 0x80) != (data & 0x80)); // poll D7 until it matches*/
-
   for (uint8_t i=0; i < 16; i++) {
     pinMode(DQ[i], INPUT);
 }

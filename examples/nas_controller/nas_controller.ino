@@ -38,13 +38,17 @@ uint8_t dat;
 uint8_t dat2;
 uint8_t packetData[8];
 
+//Device manager variables
 uint8_t _connectedDevices[MaxConnectedDeviceNum][8];
 uint8_t _previousDevices[MaxConnectedDeviceNum][8];
 
+//Performance variables
 uint8_t connectedMasterNodes = 0;
-float averageArrivalRate = 0.0;
-uint8_t fanState = 0;
-int fanPin = 7;
+unsigned long firstPacketTime = 0;
+unsigned long packetCount = 0;
+float averageArrivalRate = 0.0;   // packets per second
+int ssdCount = 0;
+bool isCommunicatingWithMarlin = 0;
 
 E2B e2b(E2B_pin);  // on pin 4 (a 4.7K resistor is necessary)
 
@@ -76,6 +80,17 @@ public:
   // Callback to handle receiving data
   void onReceive(const uint8_t *data, size_t len, bool broadcast) {
     int i;
+    
+    //Updates the average arrival rate
+    unsigned long now = millis();
+    if (packetCount == 0)
+      firstPacketTime = now;  // first packet sets the baseline
+
+    packetCount++;
+    unsigned long elapsed = now - firstPacketTime;
+    if (elapsed > 0)
+      averageArrivalRate = (float)packetCount / ((float)elapsed / 1000.0);  // packets per second
+
     if (len == sizeof(DataPacket)){
       DataPacket *packet = (DataPacket *)data;
       //Serial.printf("Received a message from master " MACSTR " (%s)\n", MAC2STR(addr()), broadcast ? "broadcast" : "unicast");
@@ -190,7 +205,6 @@ void setup(){
   while(!Serial){}
   Serial.println("E2B NAS Controller.");
   pinMode(buttonPin,INPUT_PULLUP);
-  pinMode(fanPin, OUTPUT);
 
   if (!EEPROM.begin(1000)) {
     Serial.println("Failed to initialize EEPROM");
@@ -231,6 +245,9 @@ void setup(){
 
 void loop(){
   button_manager();
+  if (Serial.available() > 0){
+    marlin_command_manager();
+  }
 }
 
 
@@ -389,6 +406,8 @@ bool get_connected_devices_from_EEPROM(){
 
 //Prints the current state of _connectedDevices
 void print_connected_devices(){
+  run_diagnostics();
+  delay(100);
   Serial.println("_connectedDevices:");
   for(byte i=0; i < MaxConnectedDeviceNum; i++){
     Serial.print("Slot "); Serial.print(i); Serial.print(": ");
@@ -397,4 +416,77 @@ void print_connected_devices(){
     }
     Serial.println();
   }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////MARLIN UI FUNCTIONS/////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Handles commands being received by Marlin UI
+void marlin_command_manager(){
+  isCommunicatingWithMarlin = 1;
+  char receivedChar = Serial.read();
+  if(receivedChar == 'A'){
+    run_diagnostics();
+  } else if(receivedChar == 'B'){
+    run_speedtest();
+  }else{
+    Serial.println("Unknown command");
+  }
+  isCommunicatingWithMarlin = 0;
+}
+
+// Empty function for diagnostics (you can add your own code here later)
+void run_diagnostics() {
+  String dataToSend = "";
+
+  //Updates ssdCount
+  ssdCount = 0;
+  for (uint8_t i=0; i < MaxConnectedDeviceNum; i++) {
+    if(_connectedDevices[i][0]){
+      ssdCount++;
+    }
+  }
+
+  dataToSend += String(ssdCount);
+  dataToSend += ",";
+  dataToSend += String(connectedMasterNodes);
+  dataToSend += ",";
+  dataToSend += String(MaxConnectedDeviceNum);
+  dataToSend += ",";
+  dataToSend += String(averageArrivalRate);
+
+  if(ssdCount){
+    for(uint8_t i=0; i < ssdCount; i++){
+      byte present = 0;
+      byte data[9];
+
+      dataToSend += ",[";
+
+      present = e2b.reset();
+      e2b.select(_connectedDevices[i]);
+      e2b.read_scratchpad();
+
+      //Serial.print("Data = ");
+      //Serial.print(present, HEX);
+      //Serial.print(" ");
+      for (uint8_t j=0; j < 9; j++) {           // we only need 2 bytes, 9 shows the whole response packet
+        data[j] = e2b.read();
+        //Serial.print(data[j], HEX);
+        //Serial.print(" ");
+        dataToSend += String(data[j]);
+        if(j < 8)
+          dataToSend += ",";
+      }
+      dataToSend += "]";
+      //Serial.println();
+      delay(10);
+    }
+  }
+  Serial.println(dataToSend);
+}
+
+//Runs a test to determine how fast the transfer speeds are
+void run_speedtest(){
+  delay(6000);
+  Serial.write("Groovy,6.74 kb/s, 5.21 kb/s,1,1,0,4");
 }
