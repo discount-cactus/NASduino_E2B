@@ -429,7 +429,7 @@ def run_speedtest():
 
     #button_speedtest.config(state=tk.DISABLED)
 
-    timeoutVal = 10
+    timeoutVal = 60
     try:
         with serial.Serial(SELECTED_DEVICE, 115200, timeout=timeoutVal) as ser:
             time.sleep(1)

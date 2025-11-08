@@ -18,7 +18,7 @@ device connected to the NAS via ESP-NOW which is also an ESP32 (for simplicity)
 #define buttonPin 5
 #define MaxConnectedDeviceNum 12
 
-#define cmd_delay 200
+#define cmd_delay 50
 
 // Define the structure to hold the data
 struct DataPacket {
@@ -50,6 +50,11 @@ float averageArrivalRate = 0.0;   // packets per second
 int ssdCount = 0;
 bool isCommunicatingWithMarlin = 0;
 
+float averageReadSpeed = 0.0;
+float averageWriteSpeed = 0.0;
+float averageRoundTripPacketSpeed = 0.0;
+float bitErrorRate = 0.0;
+
 E2B e2b(E2B_pin);  // on pin 4 (a 4.7K resistor is necessary)
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,6 +85,10 @@ public:
   // Callback to handle receiving data
   void onReceive(const uint8_t *data, size_t len, bool broadcast) {
     int i;
+
+    //Exits if the Marlin UI is issuing commands to the controller
+    if(isCommunicatingWithMarlin)
+      return;
     
     //Updates the average arrival rate
     unsigned long now = millis();
@@ -428,7 +437,7 @@ void marlin_command_manager(){
   if(receivedChar == 'A'){
     run_diagnostics();
   } else if(receivedChar == 'B'){
-    run_speedtest();
+    run_speed_test();
   }else{
     Serial.println("Unknown command");
   }
@@ -486,7 +495,135 @@ void run_diagnostics() {
 }
 
 //Runs a test to determine how fast the transfer speeds are
-void run_speedtest(){
-  delay(6000);
-  Serial.write("Groovy,6.74 kb/s, 5.21 kb/s,1,1,0,4");
+void run_speed_test(){
+  int i;
+  int j;
+  const int testIterationCount = 100;
+
+  uint8_t pn;
+  uint8_t wr = 0xA;
+  int adr = 0;
+  uint8_t dat = 0xE5;
+  uint8_t dat2 = 0x00;
+
+  float _newAverageReadSpeed = 0.0;
+  float _newAverageWriteSpeed = 0.0;
+  float _newAverageRoundTripPacketSpeed = 0.0;
+  float _newBitErrorRate = 0.0;
+  float startTime_us = 0.0;
+  float endTime_us = 0.0;
+  float totalTime_us = 0.0;
+  float startTime2_us = 0.0;
+  float endTime2_us = 0.0;
+  float totalTime2_us = 0.0;
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  packetData[0] = wr;                        // Command: 0xA = write, 0xB = read
+  for(i=0; i < 4; i++){                     //Encodes the address into 4 bytes
+    packetData[i + 1] = (adr >> (i * 8)) & 0xFF;  //packetData[i] = (adr >> (i * 8)) & 0xFF;  // Extract each byte
+  }
+  packetData[5] = dat;             // Data LSB
+  packetData[6] = dat2;            // Data MSB
+  packetData[7] = 0x00;            // Reserved or checksum placeholder
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  //Finds the port number of the first connected device
+  int checksum = 0;
+  for (i=0; i < MaxConnectedDeviceNum; i++){
+    for (j=0; j < 8; j++) {
+      checksum += _connectedDevices[i][j];
+    }
+    if(checksum){
+      pn = i;
+      break;
+    }
+  }
+  if(!checksum){
+    //Serial.println("No device logged at that the queried port.");
+    return;
+  }
+
+  //Write commands test
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  packetData[0] = 0xA;
+  totalTime_us = 0.0;
+  for(i=0; i < testIterationCount; i++){
+    startTime_us = millis(); //micros();
+    e2b.reset();
+    e2b.select(_connectedDevices[pn]);
+    e2b.write_scratchpad();
+    for(j=0; j < 8; j++){
+      e2b.write(packetData[j]);
+      //Serial.print(packetData[i],HEX); Serial.print(" ");
+    }
+    //Serial.println(" ");
+    endTime_us = millis(); //micros();
+    totalTime_us += (endTime_us - startTime_us);
+  }
+  _newAverageWriteSpeed = totalTime_us / testIterationCount;
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  //Read commands test
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+  packetData[0] = 0xB; 
+  totalTime_us = 0.0;
+  totalTime2_us = 0.0;
+  int errors = 0;
+  for(i=0; i < testIterationCount; i++){
+    //Write portion of test
+    startTime2_us = millis(); //micros();
+    e2b.reset();
+    e2b.select(_connectedDevices[pn]);
+    e2b.write_scratchpad();
+    for(j=0; j < 8; j++){
+      e2b.write(packetData[j]);
+      //Serial.print(packetData[i],HEX); Serial.print(" ");
+    }
+    //Serial.println(" ");
+
+    delay(cmd_delay);
+
+    //Read portion of test
+    startTime_us = millis(); //micros();
+    byte present = 0;
+    byte data[9];
+    present = e2b.reset();
+    e2b.select(_connectedDevices[pn]);
+    e2b.read_scratchpad();
+
+    //Serial.print("Data = ");
+    //Serial.print(present, HEX);
+    //Serial.print(" ");
+    for (j=0; j < 9; j++) {           // we only need 2 bytes, 9 shows the whole response packet
+      data[j] = e2b.read();
+      //Serial.print(data[j], HEX);
+      //Serial.print(" ");
+    }
+    //Serial.println();
+    if(data[0] != 0xE5)
+        errors++;
+    endTime_us = millis(); //micros();
+    endTime2_us = millis(); //micros();
+    totalTime_us += (endTime_us - startTime_us);
+    totalTime2_us += (endTime2_us - startTime2_us);
+  }
+  _newAverageReadSpeed = totalTime_us / testIterationCount;
+  _newAverageRoundTripPacketSpeed = totalTime2_us / testIterationCount;
+  _newBitErrorRate = errors / testIterationCount;
+  ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+  //Updates variables and sends response to Marlin GUI
+  averageReadSpeed = _newAverageReadSpeed;
+  averageWriteSpeed = _newAverageWriteSpeed;
+  averageRoundTripPacketSpeed = _newAverageRoundTripPacketSpeed;
+  bitErrorRate = _newBitErrorRate;
+
+  String speedTestRsponse = "";
+  speedTestRsponse += String(averageReadSpeed);
+  speedTestRsponse += ", ";
+  speedTestRsponse += String(averageWriteSpeed);
+  speedTestRsponse += ", ";
+  speedTestRsponse += String(averageRoundTripPacketSpeed);
+  speedTestRsponse += ", ";
+  speedTestRsponse += String(bitErrorRate);
+  Serial.println(speedTestRsponse); // Sends response back to the Marlin UI
 }
