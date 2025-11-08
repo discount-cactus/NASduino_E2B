@@ -16,6 +16,7 @@ window_width = 800
 window_height = 800
 window_background_col = '#080840'
 button_col = '#4287f5'
+button_col2 = '#66A0FF'
 button_text_col = 'black'
 button_width = 15
 button_height = 2
@@ -30,9 +31,13 @@ SELECTED_DEVICE_DESCRIPTION = None  # Store the device description
 SELECTED_DEVICE_SERIALNUMBER = None  # Store the device serial number
 SELECTED_DEVICE_MASTERCOUNT = None
 SELECTED_DEVICE_MAXDEVICES = None
-SELECTED_DEVICE_AVG_ARRIVALRATE = None
-SELECTED_DEVICE_MEMORY = None
 SELECTED_DEVICE_SSDCOUNT = None
+
+averageArrivalRate = 0.0
+averageReadSpeed = 0
+averageWriteSpeed = 0
+averageRoundTripPacketSpeed = 0
+bitErrorRate = 0
 
 # Class to represent a green box
 class GreenBox:
@@ -289,20 +294,16 @@ def on_device_disconnected(popup):
 
     SELECTED_DEVICE_SSDCOUNT = "Unknown"
     SELECTED_DEVICE_MAXDEVICES = "Unknown"
-    SELECTED_DEVICE_AVG_ARRIVALRATE = "Unknown"
-    SELECTED_DEVICE_MEMORY = "Unknown"
     
     # Update the labels to reflect the disconnection
     label_device_arch.config(text=f"Architecture: {SELECTED_DEVICE_ARCH}")
     label_device_id.config(text=f"ID: {SELECTED_DEVICE_IDENTIFIER}")
     label_device_description.config(text=f"Description: {SELECTED_DEVICE_DESCRIPTION}")
     label_device_serialnumber.config(text=f"Serial Number: {SELECTED_DEVICE_SERIALNUMBER}")
-    label_device_mcp1.config(fg='black', text=f"Architecture: {SELECTED_DEVICE_MASTERCOUNT}")
+    label_device_master_count.config(fg='black', text=f"Architecture: {SELECTED_DEVICE_MASTERCOUNT}")
 
     label_device_ssd_count.config(text=f"SSD Count: {SELECTED_DEVICE_SSDCOUNT}")
-    label_device_mcp2.config(fg='black', text=f"ID: {SELECTED_DEVICE_MAXDEVICES}")
-    label_device_isns.config(fg='black', text=f"Description: {SELECTED_DEVICE_AVG_ARRIVALRATE}")
-    label_device_memory.config(fg='black', text=f"Serial Number: {SELECTED_DEVICE_MEMORY}")
+    label_max_devices.config(fg='black', text=f"ID: {SELECTED_DEVICE_MAXDEVICES}")
     selected_device_label.config(text=f"Device: None")
     
     # You can add additional logic that you want to run when the device is disconnected
@@ -321,7 +322,7 @@ def run_diagnostics():
         with serial.Serial(SELECTED_DEVICE, 115200, timeout=timeoutVal) as ser:
             time.sleep(1)
             ser.write(b'A')  # Send command followed by newline
-            print("Sent A command to Arduino")
+            #print("Sent A command to Arduino")
 
             start_time = time.time()
             response = ''
@@ -344,9 +345,7 @@ def run_diagnostics():
                     SELECTED_DEVICE_SSDCOUNT = int(data_array[0])
                     SELECTED_DEVICE_MASTERCOUNT = int(data_array[1])
                     SELECTED_DEVICE_MAXDEVICES = int(data_array[2])
-                    SELECTED_DEVICE_AVG_ARRIVALRATE = float(data_array[3])
-                    #SELECTED_DEVICE_MEMORY = data_array[4]
-
+                    averageArrivalRate = float(data_array[3])
                     if array_indexes > 4:
                         # Iterate over the remaining elements (blocks)
                         for i in range(4, array_indexes):
@@ -360,9 +359,9 @@ def run_diagnostics():
                     
                     # Update the labels with the new values
                     label_device_ssd_count.config(text=f"SSD Count: {SELECTED_DEVICE_SSDCOUNT}")
-                    label_device_mcp1.config(text=f"Master Nodes: {SELECTED_DEVICE_MASTERCOUNT}")
-                    label_device_mcp2.config(text=f"Max Devices: {SELECTED_DEVICE_MAXDEVICES}")
-                    label_device_isns.config(text=f"Avg Arrival Rate: {SELECTED_DEVICE_AVG_ARRIVALRATE}")
+                    label_device_master_count.config(text=f"Master Nodes: {SELECTED_DEVICE_MASTERCOUNT}")
+                    label_max_devices.config(text=f"Max Devices: {SELECTED_DEVICE_MAXDEVICES}")
+                    label_avg_arrival_rate.config(text=f"Avg Arrival Rate: {averageArrivalRate}")
 
                     # Create the display for SSD boxes after receiving response
                     create_ssd_display(SELECTED_DEVICE_SSDCOUNT)
@@ -425,7 +424,7 @@ def create_ssd_display(ssd_count):
 
 # Runs speed test for the connected device
 def run_speedtest():
-    global SELECTED_DEVICE
+    global SELECTED_DEVICE, averageReadSpeed, averageWriteSpeed, averageRoundTripPacketSpeed, bitErrorRate
 
     #button_speedtest.config(state=tk.DISABLED)
 
@@ -434,7 +433,7 @@ def run_speedtest():
         with serial.Serial(SELECTED_DEVICE, 115200, timeout=timeoutVal) as ser:
             time.sleep(1)
             ser.write(b'B')  # Send command followed by newline
-            print("Sent B command to Arduino")
+            #print("Sent B command to Arduino")
 
             start_time = time.time()
             response = ''
@@ -444,6 +443,25 @@ def run_speedtest():
                 if ser.in_waiting > 0:
                     response = ser.readline().decode('utf-8').strip()
                     print(f"Received from Arduino: {response}")
+                    
+                    # --- Parse the response ---
+                    parts = [p.strip() for p in response.split(',')]
+                    if len(parts) == 4:
+                        averageReadSpeed = float(parts[0])
+                        averageWriteSpeed = float(parts[1])
+                        averageRoundTripPacketSpeed = float(parts[2])
+                        bitErrorRate = float(parts[3])
+
+                        print(f"Read Speed: {averageReadSpeed} ms")
+                        print(f"Write Speed: {averageWriteSpeed} ms")
+                        print(f"Round Trip: {averageRoundTripPacketSpeed} ms")
+                        print(f"BER: {bitErrorRate} %")
+                        label_avg_read_speed.config(text=f"Avg Read Speed: {averageReadSpeed:.2f} ms")
+                        label_avg_write_speed.config(text=f"Avg Write Speed: {averageWriteSpeed:.2f} ms")
+                        label_avg_RTT_speed.config(text=f"Avg Round-Trip Time (RTT): {averageRoundTripPacketSpeed:.2f} ms")
+                        label_avg_BER.config(text=f"BER: {bitErrorRate:.4f}")
+                    else:
+                        print("Unexpected response format:", response)
                     #button_speedtest.config(state=tk.NORMAL)
                     break
                 
@@ -611,49 +629,76 @@ frame_display_width = window_width * 0.9  # 90% of the window width
 frame_display = tk.Frame(root, bg=button_col, width=frame_display_width, height=300, bd=0, relief="flat", padx=0, pady=0)
 frame_display.place(x=center_x - (frame_display_width // 2), y=80)
 
+
 frame_data = tk.Frame(root, bg=button_col, width=frame_display_width, height=370)
 frame_data.place(x=center_x - (frame_display_width // 2), y=400)  # Placed below frame_display
+
+frame_data_buttons = tk.Frame(frame_data, bg=button_col2, width=frame_display_width, height=40)  # Red background
+frame_data_buttons.pack(side="top", fill="x")
+
+frame_data_controller = tk.Frame(frame_data, bg=button_col, width=frame_display_width / 2, height=330)
+frame_data_controller.pack(side="left", fill="both", expand=True)
+
+frame_data_times = tk.Frame(frame_data, bg=button_col, width=frame_display_width / 2, height=330)  # Yellow background
+frame_data_times.pack(side="right", fill="both", expand=True)
 
 # Number of buttons and their positions
 num_buttons = 3
 button_spacing = (frame_display_width - (button_width * num_buttons)) / (num_buttons + 1)
 
-# Create the buttons inside frame_data and position them evenly at the top of the frame
-button_diagnostics = tk.Button(frame_data, text="Run Diagnostics", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=run_diagnostics)
-button_diagnostics.place(x=button_spacing, y=10)  # Positioned at the top left, with spacing from the left edge
+button_diagnostics = tk.Button(frame_data_buttons, text="Run Diagnostics", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=run_diagnostics)
+button_diagnostics.place(x=button_spacing, rely=0.05)
 
-button_speedtest = tk.Button(frame_data, text="Run Speed Test", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=run_speedtest)
-button_speedtest.place(x=button_spacing * 2 + button_width, y=10)  # Positioned in the center with spacing
+button_speedtest = tk.Button(frame_data_buttons, text="Run Speed Test", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=run_speedtest)
+button_speedtest.place(x=button_spacing * 2 + button_width, rely=0.05)
 
-button_netowrk_model = tk.Button(frame_data, text="Generate Model", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=generate_network_model)
-button_netowrk_model.place(x=button_spacing * 3 + button_width * 2, y=10)  # Positioned at the top right with spacing
+button_network_model = tk.Button(frame_data_buttons, text="Generate Model", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=generate_network_model)
+button_network_model.place(x=button_spacing * 3 + button_width * 2, rely=0.05)
 
-label_device_arch = tk.Label(frame_data, text="Architecture: N/A", bg=button_col, fg="black", font=("Arial", 14))
-label_device_arch.place(x=10, y=60)
 
-label_device_id = tk.Label(frame_data, text="ID: N/A", bg=button_col, fg="black", font=("Arial", 14))
-label_device_id.place(x=10, y=90)
+label_frame_data_controller = tk.Label(frame_data_controller, text="Controller Data", bg=button_col, fg="black", font=("Arial", 16, "bold"))
+label_frame_data_controller.place(relx=0.5, rely=0.05, anchor="center")
 
-label_device_description = tk.Label(frame_data, text="Description: N/A", bg=button_col, fg="black", font=("Arial", 14))
-label_device_description.place(x=10, y=120)
+label_device_arch = tk.Label(frame_data_controller, text="Architecture: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_device_arch.place(relx=0.02, rely=0.1)
 
-label_device_serialnumber = tk.Label(frame_data, text="Serial Number: N/A", bg=button_col, fg="black", font=("Arial", 14))
-label_device_serialnumber.place(x=10, y=150)
+label_device_id = tk.Label(frame_data_controller, text="ID: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_device_id.place(relx=0.02, rely=0.2)
 
-label_device_ssd_count = tk.Label(frame_data, text="SSD Count: N/A", bg=button_col, fg="black", font=("Arial", 14))
-label_device_ssd_count.place(x=10, y=180)
+label_device_description = tk.Label(frame_data_controller, text="Description: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_device_description.place(relx=0.02, rely=0.3)
 
-label_device_mcp1 = tk.Label(frame_data, text="Master Nodes: N/A", bg=button_col, fg="black", font=("Arial", 14))
-label_device_mcp1.place(x=10, y=210)
+label_device_serialnumber = tk.Label(frame_data_controller, text="Serial Number: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_device_serialnumber.place(relx=0.02, rely=0.4)
 
-label_device_mcp2 = tk.Label(frame_data, text="Max Devices: N/A", bg=button_col, fg="black", font=("Arial", 14))
-label_device_mcp2.place(x=10, y=240)
+label_device_ssd_count = tk.Label(frame_data_controller, text="SSD Count: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_device_ssd_count.place(relx=0.02, rely=0.5)
 
-label_device_isns = tk.Label(frame_data, text="Avg Arrival Rate: N/A", bg=button_col, fg="black", font=("Arial", 14))
-label_device_isns.place(x=10, y=270)
+label_device_master_count = tk.Label(frame_data_controller, text="Master Nodes: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_device_master_count.place(relx=0.02, rely=0.6)
 
-label_device_memory = tk.Label(frame_data, text="Memory: N/A", bg=button_col, fg="black", font=("Arial", 14))
-label_device_memory.place(x=10, y=300)
+label_max_devices = tk.Label(frame_data_controller, text="Max Devices: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_max_devices.place(relx=0.02, rely=0.7)
+
+
+
+label_frame_data_times = tk.Label(frame_data_times, text="Performance Metrics Area", bg=button_col, fg="black", font=("Arial", 16, "bold"))
+label_frame_data_times.place(relx=0.5, rely=0.05, anchor="center")
+
+label_avg_read_speed = tk.Label(frame_data_times, text="Avg Read Speed: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_avg_read_speed.place(relx=0.02, rely=0.1)
+
+label_avg_write_speed = tk.Label(frame_data_times, text="Avg Write Speed: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_avg_write_speed.place(relx=0.02, rely=0.2)
+
+label_avg_RTT_speed = tk.Label(frame_data_times, text="Avg Rount-Trip Time (RTT): N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_avg_RTT_speed.place(relx=0.02, rely=0.3)
+
+label_avg_BER = tk.Label(frame_data_times, text="BER: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_avg_BER.place(relx=0.02, rely=0.4)
+
+label_avg_arrival_rate = tk.Label(frame_data_times, text="Avg Arrival Rate: N/A", bg=button_col, fg="black", font=("Arial", 14), anchor="w")
+label_avg_arrival_rate.place(relx=0.02, rely=0.5)
 
 # Start the polling in a separate thread
 monitor_thread = threading.Thread(target=monitor_device, daemon=True)
