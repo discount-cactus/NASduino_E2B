@@ -383,8 +383,8 @@ def run_diagnostics():
                             ssd_database.append(ssd_block)
 
                     #print("All SSD blocks:", ssd_blocks)
-                    print("-------------------------------------------------------------------------------------------------------------------------------")
-                    print("\nDetailed SSD database info:")
+                    print("\n-------------------------------------------------------------------------------------------------------------------------------")
+                    print("Detailed SSD database info:")
                     for ssd in ssd_database:
                         sp = ssd.scratchpad_bytes
                         ssdMemType = "Unknown"
@@ -651,6 +651,20 @@ def generate_network_model():
 
     #button_netowrk_model.config(state=tk.NORMAL)
 
+#Sends a command to the NAS controller to restart
+def restart_controller():
+    timeoutVal = 5
+    try:
+        with serial.Serial(SELECTED_DEVICE, 115200, timeout=timeoutVal) as ser:
+            time.sleep(1)
+            ser.write(b'C')  # Send command followed by newline
+            print("Sent C command to Arduino")
+    except serial.SerialException as e:
+        print(f"Error with serial communication: {e}")
+
+#Generates a virtual power budget for the NAS system
+def run_virtual_power_budget():
+    print("Placeholder")
 
 marlin_icon = PhotoImage(file="marlin_icon.png")
 icon_label = tk.Label(root, image=marlin_icon, bg=window_background_col)
@@ -696,18 +710,20 @@ frame_data_controller.pack(side="left", fill="both", expand=True)
 frame_data_times = tk.Frame(frame_data, bg=button_col, width=frame_display_width / 2, height=330)  # Yellow background
 frame_data_times.pack(side="right", fill="both", expand=True)
 
-# Number of buttons and their positions
-num_buttons = 3
-button_spacing = (frame_display_width - (button_width * num_buttons)) / (num_buttons + 1)
-
 button_diagnostics = tk.Button(frame_data_buttons, text="Run Diagnostics", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=run_diagnostics)
-button_diagnostics.place(x=button_spacing, rely=0.05)
+button_diagnostics.place(relx=0.01, rely=0.05)
 
 button_speedtest = tk.Button(frame_data_buttons, text="Run Speed Test", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=run_speedtest)
-button_speedtest.place(x=button_spacing * 2 + button_width, rely=0.05)
+button_speedtest.place(relx=0.21, rely=0.05)
 
 button_network_model = tk.Button(frame_data_buttons, text="Generate Model", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=generate_network_model)
-button_network_model.place(x=button_spacing * 3 + button_width * 2, rely=0.05)
+button_network_model.place(relx=0.41, rely=0.05)
+
+button_restart_controller = tk.Button(frame_data_buttons, text="Restart Controller", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=restart_controller)
+button_restart_controller.place(relx=0.61, rely=0.05)
+
+button_virtual_power_budget = tk.Button(frame_data_buttons, text="VPB", width=button_width, height=button_height, bg=button_col, fg=button_text_col, font=("Arial", 14), command=run_virtual_power_budget)
+button_virtual_power_budget.place(relx=0.81, rely=0.05)
 
 
 label_frame_data_controller = tk.Label(frame_data_controller, text="Controller Data", bg=button_col, fg="black", font=("Arial", 16, "bold"))

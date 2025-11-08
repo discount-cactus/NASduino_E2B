@@ -438,6 +438,8 @@ void marlin_command_manager(){
     run_diagnostics();
   } else if(receivedChar == 'B'){
     run_speed_test();
+  } else if(receivedChar == 'C'){
+    marlin_restart_controller();
   }else{
     Serial.println("Unknown command");
   }
@@ -542,7 +544,7 @@ void run_speed_test(){
     }
   }
   if(!checksum){
-    //Serial.println("No device logged at that the queried port.");
+    Serial.println("ERR, ERR, ERR, ERR"); // Sends response back to the Marlin UI
     return;
   }
 
@@ -630,4 +632,8 @@ void run_speed_test(){
   speedTestRsponse += ", ";
   speedTestRsponse += String(bitErrorRate);
   Serial.println(speedTestRsponse); // Sends response back to the Marlin UI
+}
+
+void marlin_restart_controller(){
+  ESP.restart();
 }
