@@ -34,7 +34,6 @@ uint16_t dataOutgoing;    //originally: int dataOutgoing
 String dataInString = "";
 uint8_t dataReceived[8];
 
-uint8_t statusBits = 0;
 int capacity = 12;                    //A percentage out of 100 (ex: capacity = 12 --> 12/100)
 
 float totalServiceRate = 1.0;
@@ -126,11 +125,6 @@ uint8_t update_status(){
   }
   ssd_write_eeprom(checkAddr,checkDat);
 
-  /*int IntegerPart = (int)(averageServiceRate);
-  int DecimalPart = 100 * (averageServiceRate - IntegerPart);
-  ssd_status[1] = IntegerPart;
-  ssd_status[2] = DecimalPart;*/
-
   Serial.print("Status bits: "); Serial.println(statBits);
   Serial.println("---------------------------------------------------------------------------------------------------------------");
   return statBits;
@@ -173,7 +167,7 @@ void handle_command(){
     e2b.scratchpad[2] = memory_type;
     e2b.scratchpad[3] = memory_size;
     e2b.scratchpad[5] = memory_kb_or_mb;
-    e2b.scratchpad[6] = statusBits;
+    e2b.scratchpad[6] = update_status();
     e2b.scratchpad[7] = capacity;
     e2b.scratchpad[8] = 0;
     e2b.setScratchpad(e2b.scratchpad);
@@ -187,11 +181,9 @@ void handle_command(){
 
   intervalNum++;
   if(intervalNum >= intervalThreshold){
-    //update_status();
-    //capacity = find_capacity();
+    capacity = find_capacity();
     intervalNum = 0;
   }
-  //receive_status_update();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

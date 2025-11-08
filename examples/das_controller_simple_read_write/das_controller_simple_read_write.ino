@@ -18,7 +18,7 @@ This sketch directly interfaces to subsequent SSD's via E2B
 #define buttonPin 5
 #define MaxConnectedDeviceNum 12
 
-#define cmd_delay 200
+#define cmd_delay 50
 
 unsigned char rom[8] = {FAMILYCODE, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x11, 0x00};
 unsigned char scratchpad[9] = {0x00, 0x00, 0x4B, 0x46, 0x7F, 0xFF, 0x00, 0x10, 0x00};
@@ -67,10 +67,6 @@ void query_das_write(uint8_t port, int address, uint8_t dat){
   uint8_t i;
   //Prepares the data to send
   packetData[0] = 0xA;                        // Command: 0xA = write, 0xB = read
-  //packetData[1] = address & 0xFF;                // LSB
-  //packetData[2] = (address >> 8) & 0xFF;
-  //packetData[3] = (address >> 16) & 0xFF;
-  //packetData[4] = (address >> 24) & 0xFF;        // MSB
   for (i=0; i < 4; i++) {                     //Encodes the address into 4 bytes
     packetData[i + 1] = (address >> (i * 8)) & 0xFF;  //packetData[i] = (address >> (i * 8)) & 0xFF;  // Extract each byte
   }
@@ -89,7 +85,7 @@ void query_das_write(uint8_t port, int address, uint8_t dat){
     return;
   }
 
-  //Transmits data write command
+  //Transmits data to selected SSD
   e2b.reset();
   e2b.select(_connectedDevices[port]);
   e2b.write_scratchpad();
@@ -107,10 +103,6 @@ uint8_t query_das_read(uint8_t port, int address){
   uint8_t i;
   //Prepares the data to send
   packetData[0] = 0xB;                        // Command: 0xA = write, 0xB = read
-  //packetData[1] = address & 0xFF;                // LSB
-  //packetData[2] = (address >> 8) & 0xFF;
-  //packetData[3] = (address >> 16) & 0xFF;
-  //packetData[4] = (address >> 24) & 0xFF;        // MSB
   for (i=0; i < 4; i++) {                     //Encodes the address into 4 bytes
     packetData[i + 1] = (address >> (i * 8)) & 0xFF;  //packetData[i] = (address >> (i * 8)) & 0xFF;  // Extract each byte
   }
@@ -129,7 +121,7 @@ uint8_t query_das_read(uint8_t port, int address){
     return 0;
   }
 
-  //Transmits data read command
+  //Transmits data to selected SSD
   e2b.reset();
   e2b.select(_connectedDevices[port]);
   e2b.write_scratchpad();
@@ -159,7 +151,6 @@ uint8_t query_das_read(uint8_t port, int address){
     Serial.print(" ");
   }
   Serial.println();
-  //delay(50);
 
   delay(cmd_delay);
 

@@ -114,7 +114,7 @@ public:
       Serial.print("_ADR: "); Serial.println(adr);
       Serial.print("_DAT: "); Serial.println(dat,HEX);*/
       ///////////////////////////////////////////////////////////////////////////////////////////////////
-      if(wr != 0xA && wr != 0xB)
+      if(wr != 0xA && wr != 0xB)    //Exits if the command is not a read or write command
         return;
 
       packetData[0] = wr;                        // Command: 0xA = write, 0xB = read
@@ -126,6 +126,7 @@ public:
       packetData[7] = 0x00;                      // Reserved or checksum placeholder
       ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+      //Makes sure the port has a device connected to it
       int checksum = 0;
       for (uint8_t i=0; i < 8; i++) {
         checksum += _connectedDevices[pn][i];
@@ -135,7 +136,7 @@ public:
         return;
       }
 
-      //Transmits data
+      //Transmits data to selected SSD
       e2b.reset();
       e2b.select(_connectedDevices[pn]);
       e2b.write_scratchpad();
@@ -163,7 +164,6 @@ public:
           Serial.print(" ");
         }
         Serial.println();
-        //delay(50);
 
         // Send a response (if necessary) back to the transmitter:
         uint8_t response = data[0];
