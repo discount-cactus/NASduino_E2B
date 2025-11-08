@@ -25,7 +25,7 @@ This sketch manages read/write requests from the NAS controller and interfaces w
 #define EEPROM_WE A1
 
 unsigned char rom[8] = {FAMILYCODE, 0x45, 0xDD, 0x03, 0x00, 0x00, 0x11, 0x00};
-unsigned char scratchpad[9] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+unsigned char scratchpad[9] = {0x00, 0x00, memory_type, memory_size, 0x00, memory_kb_or_mb, 0x00, 0x00, 0x00};
 
 const uint8_t DQ[8] = {10,9,8,3,4,5,6,7};
 const uint8_t adr[16] = {0,1,2,3,4,5,6,7,0,15,14,13,12,11,10,9};

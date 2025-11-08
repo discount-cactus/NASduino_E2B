@@ -39,6 +39,27 @@ averageWriteSpeed = 0
 averageRoundTripPacketSpeed = 0
 bitErrorRate = 0
 
+class SSDBlock:
+    def __init__(self, index, rom_bytes, scratchpad_bytes):
+        self.index = index                  # store the SSD index
+        self.rom_bytes = rom_bytes          # list of 8 bytes
+        self.scratchpad_bytes = scratchpad_bytes  # list of scratchpad bytes
+
+        self.memory_type = scratchpad_bytes[2] if len(scratchpad_bytes) > 2 else None
+        self.memory_size = scratchpad_bytes[4] if len(scratchpad_bytes) > 4 else None
+        self.status_bits = scratchpad_bytes[5] if len(scratchpad_bytes) > 5 else None
+        self.capacity = scratchpad_bytes[6] if len(scratchpad_bytes) > 6 else None
+
+    def rom_hex(self):
+        return ' '.join(f'{b:02X}' for b in self.rom_bytes)
+
+    def scratchpad_hex(self):
+        return ' '.join(f'{b:02X}' for b in self.scratchpad_bytes)
+
+    def __repr__(self):
+        return f"SSDBlock(ROM={self.rom_hex()}, Scratchpad={self.scratchpad_hex()})"
+
+
 # Class to represent a green box
 class GreenBox:
     def __init__(self, canvas, x, y, width, height, color="green"):
@@ -236,6 +257,8 @@ def on_device_select(device_id):
     selected_device_label.config(text=f"Device: {SELECTED_DEVICE}")
     print(f"Selected device: {SELECTED_DEVICE}")
 
+    run_diagnostics()
+
     # Hide the dropdown menu
     device_menu.place_forget()
 
@@ -305,19 +328,16 @@ def on_device_disconnected(popup):
     label_device_ssd_count.config(text=f"SSD Count: {SELECTED_DEVICE_SSDCOUNT}")
     label_max_devices.config(fg='black', text=f"ID: {SELECTED_DEVICE_MAXDEVICES}")
     selected_device_label.config(text=f"Device: None")
-    
-    # You can add additional logic that you want to run when the device is disconnected
-    # For example, you can call other functions or reset variables.
 
 def run_diagnostics():
     import ast
-    global SELECTED_DEVICE_SSDCOUNT
+    global SELECTED_DEVICE_SSDCOUNT, SELECTED_DEVICE_MASTERCOUNT, SELECTED_DEVICE_MAXDEVICES
 
     ssd_blocks = []
+    ssd_database = []
+    timeoutVal = 5
 
     #button_diagnostics.config(state=tk.DISABLED)
-    
-    timeoutVal = 5
     try:
         with serial.Serial(SELECTED_DEVICE, 115200, timeout=timeoutVal) as ser:
             time.sleep(1)
@@ -339,7 +359,7 @@ def run_diagnostics():
                     data_array = ast.literal_eval(response_wrapped)
                     print(f"Converted data to array: {data_array}")
                     array_indexes = len(data_array)
-                    print(f"Number of indexes in data_array: {array_indexes}")
+                    #print(f"Number of indexes in data_array: {array_indexes}")
                     
                     # Assuming the data array has values for various fields
                     SELECTED_DEVICE_SSDCOUNT = int(data_array[0])
@@ -351,11 +371,45 @@ def run_diagnostics():
                         for i in range(4, array_indexes):
                             block = data_array[i]  # This is already a list
                             # Make sure all elements are ints
-                            values = [int(x) for x in block]
-                            ssd_blocks.append(values)
-                            print(f"SSD block {i-3}: {values}")
+                            #values = [int(x) for x in block]
+                            #ssd_blocks.append(values)
+                            #print(f"SSD {i-3}: {values}")
 
-                    print("All SSD blocks:", ssd_blocks)
+                            block_data = [int(x) for x in data_array[i]]  # ensure integers
+                            ssd_index = i - 3  # assign index based on loop
+                            rom_bytes = block_data[:8]
+                            scratchpad_bytes = block_data[8:]
+                            ssd_block = SSDBlock(ssd_index, rom_bytes, scratchpad_bytes)
+                            ssd_database.append(ssd_block)
+
+                    #print("All SSD blocks:", ssd_blocks)
+                    print("-------------------------------------------------------------------------------------------------------------------------------")
+                    print("\nDetailed SSD database info:")
+                    for ssd in ssd_database:
+                        sp = ssd.scratchpad_bytes
+                        ssdMemType = "Unknown"
+                        ssdMemKBorMB = ""
+                        ssdMemSizeVal = "?"
+
+                        # Decode memory type (scratchpad[2])
+                        if len(sp) > 2:
+                            if sp[2] == 0x50:
+                                ssdMemType = "EEPROM"
+                            elif sp[2] == 0x51:
+                                ssdMemType = "SRAM"
+
+                        # Decode KB or MB (scratchpad[5])
+                        if len(sp) > 5:
+                            if sp[5] == 0x03:
+                                ssdMemKBorMB = "KB"
+                            elif sp[5] == 0x06:
+                                ssdMemKBorMB = "MB"
+                        
+                        # Get the memory size value (scratchpad[3])
+                        if len(sp) > 3:
+                            ssdMemSizeVal = sp[3]
+                        print(f"SSD {ssd.index}: ROM={ssd.rom_hex()} | Scratchpad={ssd.scratchpad_hex()} | {ssdMemSizeVal}{ssdMemKBorMB} {ssdMemType}")
+                    print("-------------------------------------------------------------------------------------------------------------------------------")
                     
                     # Update the labels with the new values
                     label_device_ssd_count.config(text=f"SSD Count: {SELECTED_DEVICE_SSDCOUNT}")

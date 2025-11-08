@@ -27,7 +27,7 @@ This sketch manages read/write requests from the NAS controller and interfaces w
 #define SRAM_UB 6
 
 unsigned char rom[8] = {FAMILYCODE, 0x45, 0xDD, 0x03, 0x00, 0x00, 0x11, 0x00};
-unsigned char scratchpad[9] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+unsigned char scratchpad[9] = {0x00, 0x00, memory_type, memory_size, 0x00, memory_kb_or_mb, 0x00, 0x00, 0x00};
 
 const uint8_t DQ[16] = {10,9,8,7,6,5,4,3,0,1,MODE_LED,A3,A2,A1,A0,13};
 

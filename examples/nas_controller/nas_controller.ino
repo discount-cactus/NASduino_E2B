@@ -478,6 +478,10 @@ void run_diagnostics() {
       //Serial.print("Data = ");
       //Serial.print(present, HEX);
       //Serial.print(" ");
+      for (uint8_t j=0; j < 8; j++) {           // we only need 2 bytes, 9 shows the whole response packet
+        dataToSend += String(rom[j]);
+        dataToSend += ",";
+      }
       for (uint8_t j=0; j < 9; j++) {           // we only need 2 bytes, 9 shows the whole response packet
         data[j] = e2b.read();
         //Serial.print(data[j], HEX);
