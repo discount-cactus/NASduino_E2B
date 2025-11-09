@@ -1,4 +1,4 @@
-//Macchiato E2B SSD (Rev4) - EEPROM variant
+//Macchiato E2B SSD (Rev5) - EEPROM variant
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*NOTES:
 This sketch manages read/write requests from the NAS controller and interfaces with the onboard EEPROM chip
@@ -181,7 +181,7 @@ void handle_command(){
 
   intervalNum++;
   if(intervalNum >= intervalThreshold){
-    capacity = find_capacity();
+    //capacity = find_capacity();           //Currently commented out due to its time to compute
     intervalNum = 0;
   }
 }

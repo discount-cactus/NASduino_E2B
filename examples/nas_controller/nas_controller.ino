@@ -3,6 +3,8 @@
 /*NOTES:
 This sketch controls the NAS system and its subsequent SSD's via E2B and uses an ESP32 to communicate with the
 device connected to the NAS via ESP-NOW which is also an ESP32 (for simplicity)
+
+When running Marlin UI program with the controller connected, exit out of the Serial Monitor
 */
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,12 +33,11 @@ struct DataPacket {
 
 unsigned char rom[8] = {FAMILYCODE, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x11, 0x00};
 unsigned char scratchpad[9] = {0x00, 0x00, 0x4B, 0x46, 0x7F, 0xFF, 0x00, 0x10, 0x00};
-uint8_t pn;
+/*uint8_t pn;
 uint8_t wr;
 int adr;
 uint8_t dat;
-uint8_t dat2;
-uint8_t packetData[8];
+uint8_t dat2;*/
 
 //Device manager variables
 uint8_t _connectedDevices[MaxConnectedDeviceNum][8];
@@ -49,6 +50,7 @@ unsigned long packetCount = 0;
 float averageArrivalRate = 0.0;   // packets per second
 int ssdCount = 0;
 bool isCommunicatingWithMarlin = 0;
+bool isRunningUtilityProcess = 0;
 
 float averageReadSpeed = 0.0;
 float averageWriteSpeed = 0.0;
@@ -56,6 +58,49 @@ float averageRoundTripPacketSpeed = 0.0;
 float bitErrorRate = 0.0;
 
 E2B e2b(E2B_pin);  // on pin 4 (a 4.7K resistor is necessary)
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////READ/WRITE FUNCTIONS/////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Writes data to an SSD
+void ssd_write(uint8_t port, uint8_t packetData[8], int delay_ms){
+  //Transmits data to selected SSD
+  e2b.reset();
+  e2b.select(_connectedDevices[port]);
+  e2b.write_scratchpad();
+  for(uint8_t i=0; i < 8; i++){
+    e2b.write(packetData[i]);
+    Serial.print(packetData[i],HEX); Serial.print(" ");
+  }
+  Serial.println(" ");
+
+  delay(delay_ms);
+}
+
+//Reads data from an SSD
+uint16_t ssd_read(uint8_t port, uint8_t packetData[8], int delay_ms){
+  //Transmits data to selected SSD
+  ssd_write(port, packetData, delay_ms);
+  
+  byte present = 0;
+  byte data[9];
+  present = e2b.reset();
+  e2b.select(_connectedDevices[port]);
+  e2b.read_scratchpad();
+
+  Serial.print("Data = ");
+  Serial.print(present, HEX);
+  Serial.print(" ");
+  for (uint8_t i=0; i < 9; i++) {           // we only need 2 bytes, 9 shows the whole response packet
+    data[i] = e2b.read();
+    Serial.print(data[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+
+  uint16_t response = ((uint16_t)data[0] << 8) | data[1];
+  return response;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////ESP-NOW FUNCTIONS////////////////////////////////////////////////
@@ -85,9 +130,10 @@ public:
   // Callback to handle receiving data
   void onReceive(const uint8_t *data, size_t len, bool broadcast) {
     int i;
+    uint8_t packetData[8];
 
     //Exits if the Marlin UI is issuing commands to the controller
-    if(isCommunicatingWithMarlin)
+    if(isCommunicatingWithMarlin || isRunningUtilityProcess)
       return;
     
     //Updates the average arrival rate
@@ -104,15 +150,11 @@ public:
       DataPacket *packet = (DataPacket *)data;
       //Serial.printf("Received a message from master " MACSTR " (%s)\n", MAC2STR(addr()), broadcast ? "broadcast" : "unicast");
       Serial.println("Received a message from master");
-      pn = packet->_PORTNUM;
-      wr = packet->_WR;
-      adr = packet->_ADR;
-      dat = packet->_DAT;
-      dat2 = packet->_DAT2;
-      /*Serial.print("_PORTNUM: "); Serial.println(pn);
-      Serial.print("_WR: "); Serial.println(wr,HEX);
-      Serial.print("_ADR: "); Serial.println(adr);
-      Serial.print("_DAT: "); Serial.println(dat,HEX);*/
+      uint8_t pn = packet->_PORTNUM;
+      uint8_t wr = packet->_WR;
+      int adr = packet->_ADR;
+      uint8_t dat = packet->_DAT;
+      uint8_t dat2 = packet->_DAT2;
       ///////////////////////////////////////////////////////////////////////////////////////////////////
       if(wr != 0xA && wr != 0xB)    //Exits if the command is not a read or write command
         return;
@@ -128,7 +170,7 @@ public:
 
       //Makes sure the port has a device connected to it
       int checksum = 0;
-      for (uint8_t i=0; i < 8; i++) {
+      for (i=0; i < 8; i++) {
         checksum += _connectedDevices[pn][i];
       }
       if(checksum == 0){
@@ -136,47 +178,21 @@ public:
         return;
       }
 
-      //Transmits data to selected SSD
-      e2b.reset();
-      e2b.select(_connectedDevices[pn]);
-      e2b.write_scratchpad();
-      for(i=0; i < 8; i++){
-        e2b.write(packetData[i]);
-        Serial.print(packetData[i],HEX); Serial.print(" ");
-      }
-      Serial.println(" ");
-      
-      if(wr == 0xB){
-        byte present = 0;
-        byte data[9];
-        delay(cmd_delay);
-      
-        present = e2b.reset();
-        e2b.select(_connectedDevices[pn]);
-        e2b.read_scratchpad();
-
-        Serial.print("Data = ");
-        Serial.print(present, HEX);
-        Serial.print(" ");
-        for (i=0; i < 9; i++) {           // we only need 2 bytes, 9 shows the whole response packet
-          data[i] = e2b.read();
-          Serial.print(data[i], HEX);
-          Serial.print(" ");
-        }
-        Serial.println();
-
-        // Send a response (if necessary) back to the transmitter:
-        uint8_t response = data[0];
+      if(wr == 0xA){
+        ssd_write(pn, packetData, cmd_delay);
+      }else{
+        uint16_t response = ssd_read(pn, packetData, cmd_delay);
+        uint8_t LBresponse = lowByte(response);
+        uint8_t HBresponse = highByte(response);
         //Serial.print("response: "); Serial.println(response,HEX);
-        send_message((uint8_t *)&response, sizeof(response));
-        response = data[1];
-        if(response != 0x0){
+        send_message((uint8_t *)&HBresponse, sizeof(HBresponse));
+        if(LBresponse != 0x0){
           delay(5);                 //Probably not required
-          send_message((uint8_t *)&response, sizeof(response));
+          send_message((uint8_t *)&LBresponse, sizeof(LBresponse));
         }
-      }
 
-      delay(cmd_delay);
+        delay(cmd_delay);
+      }
 
     }else{
       Serial.println("Received invalid data");
@@ -267,6 +283,7 @@ void loop(){
 //Manages operation of the button
 void button_manager(){
   int buttonPressed = 0;
+  isRunningUtilityProcess = 1;
   if(!digitalRead(buttonPin)){
     while(!digitalRead(buttonPin)){
       buttonPressed++;
@@ -274,11 +291,13 @@ void button_manager(){
     }
     if(buttonPressed < 100){
       refresh_connected_devices();
+      ping_connected_devices();
     }else{
       initialize_connected_devices();
     }
     print_connected_devices();
   }
+  isRunningUtilityProcess = 0;
 }
 
 //Updates the list of connected devices (_connectedDevices[][])
@@ -337,6 +356,8 @@ void refresh_connected_devices() {
       return;
     }
 
+    Serial.println("Dawg1");
+
     //Search for the first empty index or a matching address
     bool beenLogged = 0;
     int firstEmptyIndex = -1;
@@ -362,6 +383,8 @@ void refresh_connected_devices() {
       }
     }
 
+    Serial.println("Dawg2");
+
     //If the address hasn't been logged yet and there is no matching address
     if ((!beenLogged) && (firstEmptyIndex != -1)) {
       for (k = 0; k < 8; k++) {
@@ -371,7 +394,11 @@ void refresh_connected_devices() {
         //EEPROM.commit();
       }
     }
+
+    Serial.println("Dawg3");
   }
+
+  Serial.println("Dawg4");
 
   //Update the previousDevices array with the current _connectedDevices
   for (i = 0; i < MaxConnectedDeviceNum; i++) {
@@ -379,6 +406,8 @@ void refresh_connected_devices() {
       _previousDevices[i][j] = _connectedDevices[i][j];
     }
   }
+
+  Serial.println("Dawg5");
 }
 
 //Sets all devices in the list to 0
@@ -425,6 +454,39 @@ void print_connected_devices(){
     }
     Serial.println();
   }
+}
+
+//Pings all connected devices with a simple write-read command sequence
+void ping_connected_devices(){
+  int i,j;
+  uint8_t packetData[8];
+  
+  uint8_t wr;
+  int adr = 0;
+  uint8_t dat = 0xE5;
+  uint8_t dat2 = 0x00;
+  packetData[0] = wr;                        // Command: 0xA = write, 0xB = read
+  for (i=0; i < 4; i++) {                     //Encodes the address into 4 bytes
+    packetData[i + 1] = (adr >> (i * 8)) & 0xFF;  //packetData[i] = (adr >> (i * 8)) & 0xFF;  // Extract each byte
+  }
+  packetData[5] = dat;
+  packetData[6] = dat2;
+  packetData[7] = 0x00;
+  //Serial.println("Pinging connected devices");
+
+  //Scans for ports and only pings ports with devices connected
+  int checksum = 0;
+  for (i=0; i < MaxConnectedDeviceNum; i++){
+    if((_connectedDevices[i][0] != 0) && (_connectedDevices[i][1] != 0)){
+      //Serial.print("Pinging port: "); Serial.println(i);
+      wr = 0xA;
+      ssd_write(i, packetData, cmd_delay);
+      wr = 0xB;
+      ssd_read(i, packetData, cmd_delay);
+      delay(5);
+    }
+  }
+  //Serial.println("Pinging complete.");
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -504,6 +566,7 @@ void run_diagnostics() {
 void run_speed_test(){
   int i;
   int j;
+  uint8_t packetData[8];
   const int testIterationCount = 100;
 
   uint8_t pn;
@@ -562,6 +625,7 @@ void run_speed_test(){
       //Serial.print(packetData[i],HEX); Serial.print(" ");
     }
     //Serial.println(" ");
+
     endTime_us = millis(); //micros();
     totalTime_us += (endTime_us - startTime_us);
   }
