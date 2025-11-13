@@ -49,6 +49,16 @@ class SSDBlock:
         self.memory_size = scratchpad_bytes[4] if len(scratchpad_bytes) > 4 else None
         self.status_bits = scratchpad_bytes[5] if len(scratchpad_bytes) > 5 else None
         self.capacity = scratchpad_bytes[6] if len(scratchpad_bytes) > 6 else None
+        self.power_draw_mW = None
+        
+        if scratchpad_bytes[2] == 0x50 & scratchpad_bytes[3] != 0 & scratchpad_bytes[5] == 0x03:
+            self.power_draw_mW = 102
+        elif scratchpad_bytes[2] == 0x51 & scratchpad_bytes[3] != 0 & scratchpad_bytes[5] != 0x06:
+            self.power_draw_mW = 108
+        elif scratchpad_bytes[2] == 0x52 & scratchpad_bytes[3] != 0 & scratchpad_bytes[5] != 0x09:
+            self.power_draw_mW = 117
+        else:
+            self.power_draw_mW = 150
 
     def rom_hex(self):
         return ' '.join(f'{b:02X}' for b in self.rom_bytes)
@@ -317,6 +327,12 @@ def on_device_disconnected(popup):
 
     SELECTED_DEVICE_SSDCOUNT = "Unknown"
     SELECTED_DEVICE_MAXDEVICES = "Unknown"
+
+    averageReadSpeed = "N/A"
+    averageWriteSpeed = "N/A"
+    averageRoundTripPacketSpeed = "N/A"
+    bitErrorRate = "N/A"
+    averageArrivalRate = "N/A"
     
     # Update the labels to reflect the disconnection
     label_device_arch.config(text=f"Architecture: {SELECTED_DEVICE_ARCH}")
@@ -324,6 +340,12 @@ def on_device_disconnected(popup):
     label_device_description.config(text=f"Description: {SELECTED_DEVICE_DESCRIPTION}")
     label_device_serialnumber.config(text=f"Serial Number: {SELECTED_DEVICE_SERIALNUMBER}")
     label_device_master_count.config(fg='black', text=f"Architecture: {SELECTED_DEVICE_MASTERCOUNT}")
+
+    label_avg_read_speed.config(text=f"Avg Read Speed: {averageReadSpeed}")
+    label_avg_write_speed.config(text=f"Avg Write Speed: {averageWriteSpeed}")
+    label_avg_RTT_speed.config(text=f"Avg Round-Trip Time (RTT): {averageRoundTripPacketSpeed}")
+    label_avg_BER.config(text=f"BER: {bitErrorRate}")
+    label_avg_arrival_rate.config(text=f"Avg Arrival Rate: {averageArrivalRate}")
 
     label_device_ssd_count.config(text=f"SSD Count: {SELECTED_DEVICE_SSDCOUNT}")
     label_max_devices.config(fg='black', text=f"ID: {SELECTED_DEVICE_MAXDEVICES}")
@@ -664,7 +686,8 @@ def restart_controller():
 
 #Generates a virtual power budget for the NAS system
 def run_virtual_power_budget():
-    print("Placeholder")
+    print("Running Virtual Power Budget...")
+
 
 marlin_icon = PhotoImage(file="marlin_icon.png")
 icon_label = tk.Label(root, image=marlin_icon, bg=window_background_col)

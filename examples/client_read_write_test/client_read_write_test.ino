@@ -19,6 +19,17 @@ struct DataPacket {
   uint8_t _DAT2;      // uint8_t variable for data 2
 };
 
+struct InfoPacket {
+  uint8_t _clientType;  // e.g. 0x01 = sensor node, 0x02 = display node, etc.
+  uint8_t _CMD;         // Command type (e.g. 0xC)
+  //uint32_t _ip;         // IP address as 32-bit integer
+  //char _name[16];       // Device name string (null-terminated)
+  int _passcode;
+  uint8_t _powerDraw_mA;
+  uint8_t _rsvd;
+};
+
+
 uint8_t queriedData = 0x00;
 uint8_t queriedData2 = 0x00;
 
@@ -99,17 +110,40 @@ void setup() {
 
   esp_now_register_recv_cb(onReceive);    // Register the onReceive callback to listen for incoming messages
 
+  nas_send_properties_to_controller();
+
   Serial.println("Setup complete. Broadcasting messages every 2 seconds.");
 }
 
 void loop(){
+  nas_send_properties_to_controller();
+  delay(1000);
   query_nas_write(0,17,0xE0D4);
-  delay(500);
+  delay(1000);
   clear_buffer();
   query_nas_read(0,17);
-  delay(500);
+  delay(1000);
 }
 
+
+
+//Sends essential data about the client to the NAS controller
+void nas_send_properties_to_controller() {
+  InfoPacket info;
+  info._clientType = 0xA8; // Example: 0x01 = generic client
+  info._CMD = 0xC; // "Info" command
+  //info._ip = WiFi.localIP(); // optional: IP as uint32_t
+  //strncpy(info._name, "ClientNode01", sizeof(info._name));
+  info._passcode = 12345678;
+  info._powerDraw_mA = 125;
+  info._rsvd = 0x00;
+
+  if (!broadcast_peer.send_message((uint8_t *)&info, sizeof(info))) {
+    Serial.println("Failed to broadcast client info message");
+  } else {
+    Serial.println("Client info sent to NAS controller");
+  }
+}
 
 //Writes to the NAS
 void query_nas_write(uint8_t port, int address, uint16_t dat){

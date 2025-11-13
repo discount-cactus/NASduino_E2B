@@ -19,7 +19,6 @@ When running Marlin UI program with the controller connected, exit out of the Se
 #define ESPNOW_WIFI_CHANNEL 6
 #define buttonPin 5
 #define MaxConnectedDeviceNum 12
-
 #define cmd_delay 50
 
 // Define the structure to hold the data
@@ -31,13 +30,16 @@ struct DataPacket {
   uint8_t _DAT2;      // uint16_t variable for data 2
 };
 
+struct InfoPacket {
+  uint8_t _clientType;
+  uint8_t _CMD;
+  int _passcode;
+  uint8_t _powerDraw_mA;
+  uint8_t _rsvd;
+};
+
 unsigned char rom[8] = {FAMILYCODE, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x11, 0x00};
 unsigned char scratchpad[9] = {0x00, 0x00, 0x4B, 0x46, 0x7F, 0xFF, 0x00, 0x10, 0x00};
-/*uint8_t pn;
-uint8_t wr;
-int adr;
-uint8_t dat;
-uint8_t dat2;*/
 
 //Device manager variables
 uint8_t _connectedDevices[MaxConnectedDeviceNum][8];
@@ -119,7 +121,7 @@ public:
     return true;
   }
   
-  bool send_message(const uint8_t *data, size_t len) {
+  bool send_message(const uint8_t *data, size_t len){
     if (!send(data, len)) {
       log_e("Failed to broadcast message");
       return false;
@@ -127,8 +129,18 @@ public:
     return true;
   }
 
+  void handle_info_packet(uint8_t clientType, uint8_t cmd, int passcode, uint8_t powerDraw, uint8_t reserved){
+    Serial.println("--------------- New Client Info Received ---------------");
+    Serial.print("Client Type: "); Serial.println(clientType,HEX);
+    Serial.print("Command: "); Serial.println(cmd,HEX);
+    Serial.print("Passcode: "); Serial.println(passcode);
+    Serial.print("Power Draw (mA): "); Serial.println(powerDraw);
+    Serial.print("Rsvd: "); Serial.println(reserved,HEX);
+    Serial.println("----------------------------------------------");
+  }
+
   // Callback to handle receiving data
-  void onReceive(const uint8_t *data, size_t len, bool broadcast) {
+  void onReceive(const uint8_t *data, size_t len, bool broadcast){
     int i;
     uint8_t packetData[8];
 
@@ -156,6 +168,9 @@ public:
       uint8_t dat = packet->_DAT;
       uint8_t dat2 = packet->_DAT2;
       ///////////////////////////////////////////////////////////////////////////////////////////////////
+      if (wr == 0xC) {
+        handle_info_packet(pn,wr,adr,dat,dat2);
+      }
       if(wr != 0xA && wr != 0xB)    //Exits if the command is not a read or write command
         return;
 
@@ -194,6 +209,8 @@ public:
         delay(cmd_delay);
       }
 
+    //}else if(len == sizeof(InfoPacket)){
+    //  handle_info_packet(pn,wr,adr,dat,dat2);
     }else{
       Serial.println("Received invalid data");
     }
