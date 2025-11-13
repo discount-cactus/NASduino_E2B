@@ -17,7 +17,7 @@ When running Marlin UI program with the controller connected, exit out of the Se
 
 #define E2B_pin 4
 #define buttonPin 5
-#define MaxConnectedDeviceNum 12
+#define MAX_SSDS_NUM 12
 #define MAX_CLIENTS_NUM 12
 #define EEPROM_SIZE 4096
 #define EEPROM_CLIENT_DATA_OFFSET 1000
@@ -53,8 +53,8 @@ unsigned char rom[8] = {FAMILYCODE, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x11, 0x00};
 unsigned char scratchpad[9] = {0x00, 0x00, 0x4B, 0x46, 0x7F, 0xFF, 0x00, 0x10, 0x00};
 
 //Device manager variables
-uint8_t _connectedDevices[MaxConnectedDeviceNum][8];
-uint8_t _previousDevices[MaxConnectedDeviceNum][8];
+uint8_t _connectedDevices[MAX_SSDS_NUM][8];
+uint8_t _previousDevices[MAX_SSDS_NUM][8];
 
 //Performance variables
 uint8_t connectedMasterNodes = 0;
@@ -307,6 +307,7 @@ void setup(){
   print_connected_devices();
 
   connectedMasterNodes = 0;
+  initialize_client_data_in_eeprom();
 
   // Initialize the Wi-Fi module
   WiFi.mode(WIFI_STA);
@@ -373,7 +374,7 @@ void refresh_connected_devices() {
   byte addr[8];
 
   //Clears connectedDevices of data
-  for (i=0; i < MaxConnectedDeviceNum; i++){
+  for (i=0; i < MAX_SSDS_NUM; i++){
     for (j=0; j < 8; j++) {
       _connectedDevices[i][j] = 0x0;
       int address = (i * 8) + k;
@@ -383,7 +384,7 @@ void refresh_connected_devices() {
   }
 
   //Adds addresses that are detected back into _connectedDevices based on _previousDevices
-  for (i=0; i < MaxConnectedDeviceNum; i++) {
+  for (i=0; i < MAX_SSDS_NUM; i++) {
     bool match = 1;
     if (!e2b.search(addr)) {
       Serial.println("No more addresses.");
@@ -393,7 +394,7 @@ void refresh_connected_devices() {
       break;
     }
     //Checks for a match in _previousDevices
-    for (j=0; j < MaxConnectedDeviceNum; j++) {
+    for (j=0; j < MAX_SSDS_NUM; j++) {
       for (k=0; k < 8; k++) {
         if(_previousDevices[j][k] != addr[k]){
             match = 0;
@@ -413,7 +414,7 @@ void refresh_connected_devices() {
   }
 
   //Find new addresses and add them if not already logged
-  for (i=0; i < MaxConnectedDeviceNum; i++) {
+  for (i=0; i < MAX_SSDS_NUM; i++) {
     if (!e2b.search(addr)) {
       Serial.println("No more addresses.");
       Serial.println();
@@ -427,7 +428,7 @@ void refresh_connected_devices() {
     //Search for the first empty index or a matching address
     bool beenLogged = 0;
     int firstEmptyIndex = -1;
-    for (j = 0; j < MaxConnectedDeviceNum; j++) {
+    for (j = 0; j < MAX_SSDS_NUM; j++) {
       if (!beenLogged) {  // If the device has already been logged, don't keep searching
         bool mismatch = 0;
         bool isEmpty = 1;
@@ -467,7 +468,7 @@ void refresh_connected_devices() {
   Serial.println("Dawg4");
 
   //Update the previousDevices array with the current _connectedDevices
-  for (i = 0; i < MaxConnectedDeviceNum; i++) {
+  for (i = 0; i < MAX_SSDS_NUM; i++) {
     for (j = 0; j < 8; j++) {
       _previousDevices[i][j] = _connectedDevices[i][j];
     }
@@ -481,7 +482,7 @@ void initialize_connected_devices(){
   connectedMasterNodes = 0;
   
   int address = 0;
-  for(byte i=0; i < MaxConnectedDeviceNum; i++){
+  for(byte i=0; i < MAX_SSDS_NUM; i++){
     for(byte j=0; j < 8; j++){
       _connectedDevices[i][j] = 0x0;
       EEPROM.write(address, 0x0);
@@ -496,7 +497,7 @@ void initialize_connected_devices(){
 bool get_connected_devices_from_EEPROM(){
   bool isEmpty = 1;
   int address = 0;
-  for(byte i=0; i < MaxConnectedDeviceNum; i++){
+  for(byte i=0; i < MAX_SSDS_NUM; i++){
     for(byte j=0; j < 8; j++){
       _connectedDevices[i][j] = EEPROM.read(address);
       if(_connectedDevices[i][j]){
@@ -513,7 +514,7 @@ void print_connected_devices(){
   run_diagnostics();
   delay(100);
   Serial.println("_connectedDevices:");
-  for(byte i=0; i < MaxConnectedDeviceNum; i++){
+  for(byte i=0; i < MAX_SSDS_NUM; i++){
     Serial.print("Slot "); Serial.print(i); Serial.print(": ");
     for(byte j=0; j < 8; j++){
       Serial.print(_connectedDevices[i][j],HEX); Serial.print(" ");
@@ -542,7 +543,7 @@ void ping_connected_devices(){
 
   //Scans for ports and only pings ports with devices connected
   int checksum = 0;
-  for (i=0; i < MaxConnectedDeviceNum; i++){
+  for (i=0; i < MAX_SSDS_NUM; i++){
     if((_connectedDevices[i][0] != 0) && (_connectedDevices[i][1] != 0)){
       //Serial.print("Pinging port: "); Serial.println(i);
       wr = 0xA;
@@ -649,7 +650,7 @@ void run_diagnostics() {
 
   //Updates ssdCount
   ssdCount = 0;
-  for (uint8_t i=0; i < MaxConnectedDeviceNum; i++) {
+  for (uint8_t i=0; i < MAX_SSDS_NUM; i++) {
     if(_connectedDevices[i][0]){
       ssdCount++;
     }
@@ -659,16 +660,50 @@ void run_diagnostics() {
   dataToSend += ",";
   dataToSend += String(connectedMasterNodes);
   dataToSend += ",";
-  dataToSend += String(MaxConnectedDeviceNum);
+  dataToSend += String(MAX_SSDS_NUM);
   dataToSend += ",";
   dataToSend += String(averageArrivalRate);
 
+  //Adds client data to transaction
+  dataToSend += ",[";
+  if(connectedMasterNodes){
+    for(uint8_t i=0; i < MAX_CLIENTS_NUM; i++){
+      if (clients[i].valid){
+        if (i > 0)
+          dataToSend += ",";
+
+        // Begin client record
+        dataToSend += "[";
+
+        dataToSend += String(i);
+        dataToSend += ",";
+        dataToSend += String(clients[i].info._name);
+        dataToSend += ",";
+
+        IPAddress ip(clients[i].info._ip);
+        dataToSend += ip.toString();
+        dataToSend += ",";
+        dataToSend += String(clients[i].info._powerDraw_mA);
+        dataToSend += ",";
+        dataToSend += String(clients[i].info._clientType);
+        dataToSend += ",";
+        dataToSend += String(clients[i].info._CMD);
+        dataToSend += "]";
+
+        // Add comma between clients (but not after last)
+        /*if (i < MAX_CLIENTS_NUM - 1){
+          dataToSend += ",";
+        }*/
+      }
+    }
+  }
+
+  //Adds SSD data to transaction
+  dataToSend += ",[";
   if(ssdCount){
     for(uint8_t i=0; i < ssdCount; i++){
       byte present = 0;
       byte data[9];
-
-      dataToSend += ",[";
 
       present = e2b.reset();
       e2b.select(_connectedDevices[i]);
@@ -689,11 +724,11 @@ void run_diagnostics() {
         if(j < 8)
           dataToSend += ",";
       }
-      dataToSend += "]";
       //Serial.println();
       delay(10);
     }
   }
+  dataToSend += "]";
   Serial.println(dataToSend);
 }
 
@@ -732,7 +767,7 @@ void run_speed_test(){
 
   //Finds the port number of the first connected device
   int checksum = 0;
-  for (i=0; i < MaxConnectedDeviceNum; i++){
+  for (i=0; i < MAX_SSDS_NUM; i++){
     for (j=0; j < 8; j++) {
       checksum += _connectedDevices[i][j];
     }
