@@ -20,13 +20,12 @@ struct DataPacket {
 };
 
 struct InfoPacket {
-  uint8_t _clientType;  // e.g. 0x01 = sensor node, 0x02 = display node, etc.
-  uint8_t _CMD;         // Command type (e.g. 0xC)
-  //uint32_t _ip;         // IP address as 32-bit integer
-  //char _name[16];       // Device name string (null-terminated)
-  int _passcode;
+  uint8_t _CMD;
+  uint8_t _clientType;
+  uint32_t _ip;
+  char _name[16];
+  char _password[16];
   uint8_t _powerDraw_mA;
-  uint8_t _rsvd;
 };
 
 
@@ -130,13 +129,12 @@ void loop(){
 //Sends essential data about the client to the NAS controller
 void nas_send_properties_to_controller() {
   InfoPacket info;
-  info._clientType = 0xA8; // Example: 0x01 = generic client
   info._CMD = 0xC; // "Info" command
-  //info._ip = WiFi.localIP(); // optional: IP as uint32_t
-  //strncpy(info._name, "ClientNode01", sizeof(info._name));
-  info._passcode = 12345678;
-  info._powerDraw_mA = 125;
-  info._rsvd = 0x00;
+  info._clientType = 0xA8;
+  info._ip = WiFi.localIP();
+  strncpy(info._name, "ClientNode01", sizeof(info._name));
+  strncpy(info._password, "pass1234", sizeof(info._password));
+  info._powerDraw_mA = 108;
 
   if (!broadcast_peer.send_message((uint8_t *)&info, sizeof(info))) {
     Serial.println("Failed to broadcast client info message");

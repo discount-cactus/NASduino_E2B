@@ -16,9 +16,10 @@ When running Marlin UI program with the controller connected, exit out of the Se
 #include "EEPROM.h"
 
 #define E2B_pin 4
-#define ESPNOW_WIFI_CHANNEL 6
 #define buttonPin 5
 #define MaxConnectedDeviceNum 12
+#define MaxClientsNum 12
+#define ESPNOW_WIFI_CHANNEL 6
 #define cmd_delay 50
 
 // Define the structure to hold the data
@@ -31,11 +32,12 @@ struct DataPacket {
 };
 
 struct InfoPacket {
-  uint8_t _clientType;
   uint8_t _CMD;
-  int _passcode;
+  uint8_t _clientType;
+  uint32_t _ip;
+  char _name[16];
+  char _password[16];
   uint8_t _powerDraw_mA;
-  uint8_t _rsvd;
 };
 
 unsigned char rom[8] = {FAMILYCODE, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x11, 0x00};
@@ -129,14 +131,25 @@ public:
     return true;
   }
 
-  void handle_info_packet(uint8_t clientType, uint8_t cmd, int passcode, uint8_t powerDraw, uint8_t reserved){
-    Serial.println("--------------- New Client Info Received ---------------");
-    Serial.print("Client Type: "); Serial.println(clientType,HEX);
-    Serial.print("Command: "); Serial.println(cmd,HEX);
-    Serial.print("Passcode: "); Serial.println(passcode);
-    Serial.print("Power Draw (mA): "); Serial.println(powerDraw);
-    Serial.print("Rsvd: "); Serial.println(reserved,HEX);
-    Serial.println("----------------------------------------------");
+  void handle_client_info_packet(const uint8_t *data, int len) {
+    if (len != sizeof(InfoPacket)) {
+      Serial.println("Invalid InfoPacket size");
+      return;
+    }
+
+    InfoPacket *info = (InfoPacket *)data;
+
+    Serial.println("------------------------- New Client Info Received -------------------------");
+    Serial.printf("Command: 0x%02X\n", info->_CMD);
+    Serial.printf("Client Type: %u\n", info->_clientType);
+    
+    IPAddress ip(info->_ip);
+    Serial.printf("IP Address: %s\n", ip.toString().c_str());
+    
+    Serial.printf("Name: %s\n", info->_name);
+    Serial.printf("Password: %s\n", info->_password);
+    Serial.printf("Power Draw (mA): %u\n", info->_powerDraw_mA);
+    Serial.println("------------------------------------------------------------------");
   }
 
   // Callback to handle receiving data
@@ -169,7 +182,7 @@ public:
       uint8_t dat2 = packet->_DAT2;
       ///////////////////////////////////////////////////////////////////////////////////////////////////
       if (wr == 0xC) {
-        handle_info_packet(pn,wr,adr,dat,dat2);
+        handle_client_info_packet(data, len);
       }
       if(wr != 0xA && wr != 0xB)    //Exits if the command is not a read or write command
         return;
@@ -178,8 +191,8 @@ public:
       for (i=0; i < 4; i++) {                     //Encodes the address into 4 bytes
         packetData[i + 1] = (adr >> (i * 8)) & 0xFF;  //packetData[i] = (adr >> (i * 8)) & 0xFF;  // Extract each byte
       }
-      packetData[5] = dat;             // Data LSB
-      packetData[6] = dat2; //highByte(dat);            // Data MSB
+      packetData[5] = dat;                       // Data LSB
+      packetData[6] = dat2; //highByte(dat);     // Data MSB
       packetData[7] = 0x00;                      // Reserved or checksum placeholder
       ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -208,9 +221,8 @@ public:
 
         delay(cmd_delay);
       }
-
-    //}else if(len == sizeof(InfoPacket)){
-    //  handle_info_packet(pn,wr,adr,dat,dat2);
+    }else if(len == sizeof(InfoPacket)){
+      handle_client_info_packet(data, len);
     }else{
       Serial.println("Received invalid data");
     }
