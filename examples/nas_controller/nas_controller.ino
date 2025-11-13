@@ -18,7 +18,9 @@ When running Marlin UI program with the controller connected, exit out of the Se
 #define E2B_pin 4
 #define buttonPin 5
 #define MaxConnectedDeviceNum 12
-#define MaxClientsNum 12
+#define MAX_CLIENTS_NUM 12
+#define EEPROM_SIZE 4096
+#define EEPROM_CLIENT_DATA_OFFSET 1000
 #define ESPNOW_WIFI_CHANNEL 6
 #define cmd_delay 50
 
@@ -39,6 +41,13 @@ struct InfoPacket {
   char _password[16];
   uint8_t _powerDraw_mA;
 };
+
+struct StoredClient {
+  InfoPacket info;
+  bool valid;
+};
+
+StoredClient clients[MAX_CLIENTS_NUM];
 
 unsigned char rom[8] = {FAMILYCODE, 0xAD, 0xDA, 0xCE, 0x0F, 0x00, 0x11, 0x00};
 unsigned char scratchpad[9] = {0x00, 0x00, 0x4B, 0x46, 0x7F, 0xFF, 0x00, 0x10, 0x00};
@@ -137,7 +146,30 @@ public:
       return;
     }
 
-    InfoPacket *info = (InfoPacket *)data;
+    //InfoPacket *info = (InfoPacket *)data;
+
+    const InfoPacket *info = reinterpret_cast<const InfoPacket *>(data);
+    // Find existing or empty slot
+    bool updated = false;
+    for (int i = 0; i < MAX_CLIENTS_NUM; i++) {
+      if (clients[i].valid && strncmp(clients[i].info._name, info->_name, 16) == 0) {
+        clients[i].info = *info;
+        updated = true;
+        break;
+      }
+    }
+
+    if (!updated) {
+      for (int i = 0; i < MAX_CLIENTS_NUM; i++) {
+        if (!clients[i].valid) {
+          clients[i].info = *info;
+          clients[i].valid = true;
+          break;
+        }
+      }
+    }
+
+    save_clients_to_eeprom();
 
     Serial.println("------------------------- New Client Info Received -------------------------");
     Serial.printf("Command: 0x%02X\n", info->_CMD);
@@ -260,12 +292,14 @@ void setup(){
   Serial.println("E2B NAS Controller.");
   pinMode(buttonPin,INPUT_PULLUP);
 
-  if (!EEPROM.begin(1000)) {
+  if (!EEPROM.begin(EEPROM_SIZE)) {
     Serial.println("Failed to initialize EEPROM");
     Serial.println("Restarting...");
     delay(10);
     ESP.restart();
   }
+  load_clients_from_eeprom();
+  print_clients();
 
   if(get_connected_devices_from_EEPROM()){
     initialize_connected_devices();
@@ -323,8 +357,11 @@ void button_manager(){
       ping_connected_devices();
     }else{
       initialize_connected_devices();
+      erase_all_clients_from_eeprom();
+      initialize_client_data_in_eeprom();
     }
     print_connected_devices();
+    print_clients();
   }
   isRunningUtilityProcess = 0;
 }
@@ -516,6 +553,75 @@ void ping_connected_devices(){
     }
   }
   //Serial.println("Pinging complete.");
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////CLIENT DATA EEPROM FUNCTIONS/////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Saves data on all clients to EEPROM
+void initialize_client_data_in_eeprom(){
+  //int addr = EEPROM_CLIENT_DATA_OFFSET;
+  //int len = EEPROM_SIZE - EEPROM_CLIENT_DATA_OFFSET;
+  for (int i = EEPROM_CLIENT_DATA_OFFSET; i < (EEPROM_SIZE - EEPROM_CLIENT_DATA_OFFSET); i++) {
+    EEPROM.put(i, 0x0);
+  }
+  EEPROM.commit();
+}
+
+//Loads data on all clients from EEPROM
+void load_clients_from_eeprom(){
+  int addr = EEPROM_CLIENT_DATA_OFFSET;
+  for (int i = 0; i < MAX_CLIENTS_NUM; i++) {
+    EEPROM.get(addr, clients[i]);
+    addr += sizeof(StoredClient);
+  }
+}
+
+//Saves data on all clients to EEPROM
+void save_clients_to_eeprom(){
+  int addr = EEPROM_CLIENT_DATA_OFFSET;
+  for (int i = 0; i < MAX_CLIENTS_NUM; i++) {
+    EEPROM.put(addr, clients[i]);
+    addr += sizeof(StoredClient);
+  }
+  EEPROM.commit();
+}
+
+//Prints the client data stored in EEPROM
+void print_clients(){
+  Serial.println("------------------------- Stored Clients -------------------------");
+  for (int i = 0; i < MAX_CLIENTS_NUM; i++) {
+    if (clients[i].valid) {
+      IPAddress ip(clients[i].info._ip);
+      Serial.printf("%d: %s @ %s | %u mA\n", i, clients[i].info._name, ip.toString().c_str(), clients[i].info._powerDraw_mA);
+    }
+  }
+  Serial.println("------------------------------------------------------------------");
+}
+
+//Erases all data of clients from EEPROM
+void erase_all_clients_from_eeprom(){
+  Serial.println("Erasing all stored client data...");
+
+  // Reset RAM copies
+  for (int i = 0; i < MAX_CLIENTS_NUM; i++) {
+    clients[i].valid = false;
+    memset(&clients[i].info, 0, sizeof(InfoPacket));
+  }
+
+  // Write blank client structs to EEPROM
+  int addr = EEPROM_CLIENT_DATA_OFFSET;
+  StoredClient blankClient;
+  memset(&blankClient, 0, sizeof(StoredClient));
+
+  for (int i = 0; i < MAX_CLIENTS_NUM; i++) {
+    EEPROM.put(addr, blankClient);
+    addr += sizeof(StoredClient);
+  }
+
+  EEPROM.commit();
+
+  Serial.println("All client data erased successfully.");
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
