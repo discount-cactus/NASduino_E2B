@@ -39,6 +39,9 @@ averageWriteSpeed = 0
 averageRoundTripPacketSpeed = 0
 bitErrorRate = 0
 
+client_database = []
+ssd_database = []
+
 class SSDBlock:
     def __init__(self, index, rom_bytes, scratchpad_bytes):
         self.index = index                  # store the SSD index
@@ -69,45 +72,93 @@ class SSDBlock:
     def __repr__(self):
         return f"SSDBlock(ROM={self.rom_hex()}, Scratchpad={self.scratchpad_hex()})"
 
+class ClientBlock:
+    def __init__(self, index, name, ip, power_mA, client_type):
+        self.index = index
+        self.name = name
+        self.ip = ip
+        self.power_mA = power_mA
+        self.client_type = client_type
+        #self.cmd = cmd
+
+    def __repr__(self):
+        return (f"ClientBlock(index={self.index}, name='{self.name}', "
+                f"ip='{self.ip}', power_mA={self.power_mA}, "
+                f"client_type={self.client_type}, cmd={self.cmd})")
 
 # Class to represent a green box
 class GreenBox:
-    def __init__(self, canvas, x, y, width, height, color="green"):
+    def __init__(self, canvas, x, y, width, height, index, data_ref=None, color="green"):
         self.canvas = canvas
+        self.index = index
+        self.data_ref = data_ref  # ← store SSDBlock reference
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.color = color
-        
-        # Create the green box on the canvas
-        self.box = self.canvas.create_rectangle(self.x, self.y, self.x + self.width, self.y + self.height, fill=self.color)
+
+        self.box = self.canvas.create_rectangle(
+            self.x, self.y, self.x + self.width, self.y + self.height,
+            fill=color, outline="black", width=2, tags=("green_box",)
+        )
+
+        self.canvas.tag_bind(self.box, "<Button-1>", self.on_click)
 
     def update(self, new_x, new_y):
-        # Update the position of the box
         self.canvas.coords(self.box, new_x, new_y, new_x + self.width, new_y + self.height)
-        self.x = new_x
-        self.y = new_y
 
+    def on_click(self, event):
+        if self.data_ref:
+            show_ssd_popup(self.data_ref)
 
 # Class to represent a gray box
 class GrayBox:
-    def __init__(self, canvas, x, y, width, height, color="gray"):
+    def __init__(self, canvas, x, y, width, height, index=0, data_ref=None):
         self.canvas = canvas
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.color = color
+        self.index = index
+        self.data_ref = data_ref
         
-        # Create the gray box on the canvas
-        self.box = self.canvas.create_rectangle(self.x, self.y, self.x + self.width, self.y + self.height, fill=self.color)
+        # Draw rectangle
+        self.box = self.canvas.create_rectangle(self.x, self.y, self.x + self.width, self.y + self.height, fill="gray")
+
+    def contains(self, event):
+        return self.x <= event.x <= self.x + self.width and \
+               self.y <= event.y <= self.y + self.height
 
     def update(self, new_x, new_y):
         # Update the position of the box
         self.canvas.coords(self.box, new_x, new_y, new_x + self.width, new_y + self.height)
         self.x = new_x
         self.y = new_y
+
+class WhiteBox:
+    def __init__(self, canvas, x, y, width, height, index, data_ref=None, color="white"):
+        self.canvas = canvas
+        self.index = index
+        self.data_ref = data_ref  # ← store ClientBlock reference
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+
+        self.box = self.canvas.create_rectangle(
+            self.x, self.y, self.x + self.width, self.y + self.height,
+            fill=color, outline="black", width=2, tags=("white_box",)
+        )
+
+        # Bind click
+        self.canvas.tag_bind(self.box, "<Button-1>", self.on_click)
+
+    def update(self, new_x, new_y):
+        self.canvas.coords(self.box, new_x, new_y, new_x + self.width, new_y + self.height)
+
+    def on_click(self, event):
+        if self.data_ref:
+            show_client_popup(self.data_ref)
 
 # Create the root window
 root = tk.Tk()
@@ -353,10 +404,10 @@ def on_device_disconnected(popup):
 
 def run_diagnostics():
     import ast
-    global SELECTED_DEVICE_SSDCOUNT, SELECTED_DEVICE_MASTERCOUNT, SELECTED_DEVICE_MAXDEVICES
+    global SELECTED_DEVICE_SSDCOUNT, SELECTED_DEVICE_MASTERCOUNT, SELECTED_DEVICE_MAXDEVICES, client_database, ssd_database
 
-    ssd_blocks = []
-    ssd_database = []
+    client_database.clear()
+    ssd_database.clear()
     timeoutVal = 5
 
     #button_diagnostics.config(state=tk.DISABLED)
@@ -390,18 +441,38 @@ def run_diagnostics():
                     averageArrivalRate = float(data_array[3])
                     if array_indexes > 4:
                         # Iterate over the remaining elements (blocks)
-                        for i in range(4, array_indexes):
-                            block = data_array[i]  # This is already a list
-                            # Make sure all elements are ints
-                            #values = [int(x) for x in block]
-                            #ssd_blocks.append(values)
-                            #print(f"SSD {i-3}: {values}")
+                        client_section = data_array[4]
+                        if isinstance(client_section, list):
+                            for client in client_section:  # ← FIXED
+                                # Expect 5-element client block: [index, name, ip, power, type]
+                                if isinstance(client, list) and len(client) >= 5:
+                                    cb = ClientBlock(
+                                        index=int(client[0]),
+                                        name=str(client[1]),
+                                        ip=str(client[2]),
+                                        power_mA=int(client[3]),
+                                        client_type=int(client[4])
+                                    )
+                                    client_database.append(cb)
+                    print("\n-------------------------------------------------------------------------------------------------------------------------------")
+                    print("Detailed Client database info:")
+                    for client in client_database:
+                        # Decode the client type
+                        if client.client_type == 0:
+                            type_str = "Standard Client"
+                        elif client.client_type == 1:
+                            type_str = "Master Node"
+                        #elif client.client_type == 2:
+                        #    type_str = "High-Power Device"
 
-                            block_data = [int(x) for x in data_array[i]]  # ensure integers
-                            ssd_index = i - 3  # assign index based on loop
-                            rom_bytes = block_data[:8]
-                            scratchpad_bytes = block_data[8:]
-                            ssd_block = SSDBlock(ssd_index, rom_bytes, scratchpad_bytes)
+                        print(f"Client {client.index}: | Name={client.name} | IP={client.ip} | Power={client.power_mA} mA | Type={client.client_type}")
+                    print("-------------------------------------------------------------------------------------------------------------------------------")
+                    if array_indexes > 5:
+                        raw = data_array[5]
+                        if isinstance(raw, list) and len(raw) >= 16:
+                            rom_bytes = raw[:8]
+                            scratchpad_bytes = raw[8:]
+                            ssd_block = SSDBlock(0, rom_bytes, scratchpad_bytes)
                             ssd_database.append(ssd_block)
 
                     #print("All SSD blocks:", ssd_blocks)
@@ -440,7 +511,7 @@ def run_diagnostics():
                     label_avg_arrival_rate.config(text=f"Avg Arrival Rate: {averageArrivalRate}")
 
                     # Create the display for SSD boxes after receiving response
-                    create_ssd_display(SELECTED_DEVICE_SSDCOUNT)
+                    create_ssd_display(SELECTED_DEVICE_MASTERCOUNT, SELECTED_DEVICE_SSDCOUNT)
                     break
                 
                 # Check if we've waited long enough
@@ -455,48 +526,125 @@ def run_diagnostics():
         #button_diagnostics.config(state=tk.NORMAL)
 
 #Displays the connected devices in frame_display
-def create_ssd_display(ssd_count):
+def create_ssd_display(client_count, ssd_count):
+    global client_database, ssd_database
+    
     # Clear the canvas before adding new boxes
     for widget in frame_display.winfo_children():
         widget.destroy()
 
-    # Create the canvas to hold the boxes (inside the frame_display Frame)
-    canvas = tk.Canvas(frame_display, width=frame_display_width, height=300, bg=button_col, bd=0, relief="flat", highlightthickness=0)
+    canvas = tk.Canvas(
+        frame_display,
+        width=frame_display_width,
+        height=300,
+        bg=button_col,
+        bd=0,
+        relief="flat",
+        highlightthickness=0
+    )
     canvas.pack(fill="both", expand=True)
 
-    # Calculate the dynamic x-positions based on the canvas width
-    gray_box_x = frame_display_width / 3  # 1/3 of the canvas width
-    green_box_x = frame_display_width * 2 / 3  # 2/3 of the canvas width
-
-    # Create the gray box in the middle using GrayBox class
-    gray_box_y = 100
+    # --- NAS Controller (Gray Box, Center) ---
     gray_box_width = 100
     gray_box_height = 100
-    gray_box = GrayBox(canvas, gray_box_x, gray_box_y, gray_box_width, gray_box_height)
+    gray_box_x = frame_display_width / 2 - gray_box_width / 2
+    gray_box_y = 100
+    gray_box = GrayBox(canvas, gray_box_x, gray_box_y, gray_box_width, gray_box_height, index=0, data_ref=None)
 
-    # Calculate the middle-right edge of the gray box
-    gray_box_middle_right_x = gray_box_x + gray_box_width
-    gray_box_middle_y = gray_box_y + gray_box_height / 2
+    # Middle points of the NAS controller for drawing lines
+    gray_middle_left  = (gray_box_x, gray_box_y + gray_box_height / 2)
+    gray_middle_right = (gray_box_x + gray_box_width, gray_box_y + gray_box_height / 2)
 
-    # Create the green boxes based on SSD count using GreenBox class
+    # --- SSD Boxes (Right Side) ---
     green_box_width = 50
     green_box_height = 30
-    vertical_spacing = 300 / ssd_count if ssd_count > 0 else 1  # To space them equally in the given height
+    green_box_x = frame_display_width * 0.75
+    vertical_spacing_ssd = 280 / ssd_count if ssd_count > 0 else 1
 
-    green_boxes = []
+    ssd_boxes = []
     for i in range(ssd_count):
-        y_position = 20 + i * vertical_spacing  # Top padding + equal spacing between boxes
-        green_box = GreenBox(canvas, green_box_x, y_position, green_box_width, green_box_height)
+        y = 10 + i * vertical_spacing_ssd
+        g = GreenBox(
+            canvas, green_box_x, y, green_box_width, green_box_height,
+            index=i, data_ref=ssd_database[i]
+        )
+        ssd_boxes.append(g)
 
-        # Calculate the middle-left edge of each green box
-        green_box_middle_left_x = green_box_x
-        green_box_middle_y = y_position + green_box_height / 2
+        # Draw line NAS → SSD
+        canvas.create_line(
+            gray_middle_right[0], gray_middle_right[1],
+            green_box_x, y + green_box_height / 2
+        )
 
-        # Draw a line from the gray box to each green box
-        canvas.create_line(gray_box_middle_right_x, gray_box_middle_y, green_box_middle_left_x, green_box_middle_y)
+    # --- Client Boxes (Left Side) ---
+    white_box_width = 50
+    white_box_height = 30
+    white_box_x = frame_display_width * 0.20
+    vertical_spacing_client = 280 / client_count if client_count > 0 else 1
 
-        green_boxes.append(green_box)
+    client_boxes = []
+    for i in range(client_count):
+        y = 10 + i * vertical_spacing_client
+        w = WhiteBox(
+            canvas, white_box_x, y, white_box_width, white_box_height,
+            index=i, data_ref=client_database[i]
+        )
+        client_boxes.append(w)
 
+        # Draw line Client → NAS
+        canvas.create_line(
+            white_box_x + white_box_width, y + white_box_height / 2,
+            gray_middle_left[0], gray_middle_left[1]
+        )
+
+    # --- CLICK HANDLING ---
+    # Combine all boxes into a single list
+    all_boxes = ssd_boxes + client_boxes + [gray_box]
+
+    def on_click(event):
+        for box in all_boxes:
+            if box.contains(event):
+                show_box_popup(box)
+                break
+
+    canvas.bind("<Button-1>", on_click)
+
+def show_box_popup(box_type, index):
+    win = tk.Toplevel()
+    win.title(f"{box_type.upper()} #{index}")
+    win.geometry("250x120")
+
+    label = tk.Label(win, text=f"You clicked on {box_type.upper()} #{index}", font=("Arial", 12))
+    label.pack(pady=20)
+
+    close_btn = tk.Button(win, text="OK", command=win.destroy)
+    close_btn.pack()
+
+def show_client_popup(client: ClientBlock):
+    popup = tk.Toplevel()
+    popup.title(f"Client {client.index} Information")
+
+    info = (
+        f"Index: {client.index}\n"
+        f"Name: {client.name}\n"
+        f"IP Address: {client.ip}\n"
+        f"Power Draw: {client.power_mA} mA\n"
+        f"Type: {client.client_type}"
+    )
+
+    tk.Label(popup, text=info, font=("Arial", 12), justify="left").pack(padx=20, pady=20)
+
+def show_ssd_popup(ssd: SSDBlock):
+    popup = tk.Toplevel()
+    popup.title(f"SSD {ssd.index} Information")
+
+    info = (
+        f"Index: {ssd.index}\n"
+        f"ROM Bytes: {ssd.rom_hex()}\n"
+        f"Scratchpad: {ssd.scratchpad_hex()}\n"
+    )
+
+    tk.Label(popup, text=info, font=("Arial", 12), justify="left").pack(padx=20, pady=20)
 
 # Runs speed test for the connected device
 def run_speedtest():

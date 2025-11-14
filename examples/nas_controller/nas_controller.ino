@@ -676,18 +676,18 @@ void run_diagnostics() {
         dataToSend += "[";
 
         dataToSend += String(i);
-        dataToSend += ",";
+        dataToSend += ",\"";
         dataToSend += String(clients[i].info._name);
-        dataToSend += ",";
+        dataToSend += "\",\"";
 
         IPAddress ip(clients[i].info._ip);
         dataToSend += ip.toString();
-        dataToSend += ",";
+        dataToSend += "\",";
         dataToSend += String(clients[i].info._powerDraw_mA);
         dataToSend += ",";
         dataToSend += String(clients[i].info._clientType);
-        dataToSend += ",";
-        dataToSend += String(clients[i].info._CMD);
+        //dataToSend += ",";
+        //dataToSend += String(clients[i].info._CMD);
         dataToSend += "]";
 
         // Add comma between clients (but not after last)
@@ -699,7 +699,7 @@ void run_diagnostics() {
   }
 
   //Adds SSD data to transaction
-  dataToSend += ",[";
+  dataToSend += "],[";
   if(ssdCount){
     for(uint8_t i=0; i < ssdCount; i++){
       byte present = 0;
