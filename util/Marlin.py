@@ -52,16 +52,16 @@ class SSDBlock:
         self.memory_size = scratchpad_bytes[4] if len(scratchpad_bytes) > 4 else None
         self.status_bits = scratchpad_bytes[5] if len(scratchpad_bytes) > 5 else None
         self.capacity = scratchpad_bytes[6] if len(scratchpad_bytes) > 6 else None
-        self.power_draw_mW = None
+        self.current_draw_mA = None
         
         if scratchpad_bytes[2] == 0x50 & scratchpad_bytes[3] != 0 & scratchpad_bytes[5] == 0x03:
-            self.power_draw_mW = 102
+            self.current_draw_mA = 102
         elif scratchpad_bytes[2] == 0x51 & scratchpad_bytes[3] != 0 & scratchpad_bytes[5] != 0x06:
-            self.power_draw_mW = 108
+            self.current_draw_mA = 108
         elif scratchpad_bytes[2] == 0x52 & scratchpad_bytes[3] != 0 & scratchpad_bytes[5] != 0x09:
-            self.power_draw_mW = 117
+            self.current_draw_mA = 117
         else:
-            self.power_draw_mW = 150
+            self.current_draw_mA = 150
 
     def rom_hex(self):
         return ' '.join(f'{b:02X}' for b in self.rom_bytes)
@@ -73,18 +73,17 @@ class SSDBlock:
         return f"SSDBlock(ROM={self.rom_hex()}, Scratchpad={self.scratchpad_hex()})"
 
 class ClientBlock:
-    def __init__(self, index, name, ip, power_mA, client_type):
+    def __init__(self, index, name, ip, current_mA, client_type):
         self.index = index
         self.name = name
         self.ip = ip
-        self.power_mA = power_mA
+        self.current_mA = current_mA
         self.client_type = client_type
-        #self.cmd = cmd
 
     def __repr__(self):
         return (f"ClientBlock(index={self.index}, name='{self.name}', "
-                f"ip='{self.ip}', power_mA={self.power_mA}, "
-                f"client_type={self.client_type}, cmd={self.cmd})")
+                f"ip='{self.ip}', current_mA={self.current_mA}, "
+                f"client_type={self.client_type}")
 
 # Class to represent a green box
 class GreenBox:
@@ -103,6 +102,10 @@ class GreenBox:
         )
 
         self.canvas.tag_bind(self.box, "<Button-1>", self.on_click)
+
+    def contains(self, event):
+        return self.x <= event.x <= self.x + self.width and \
+               self.y <= event.y <= self.y + self.height
 
     def update(self, new_x, new_y):
         self.canvas.coords(self.box, new_x, new_y, new_x + self.width, new_y + self.height)
@@ -125,9 +128,9 @@ class GrayBox:
         # Draw rectangle
         self.box = self.canvas.create_rectangle(self.x, self.y, self.x + self.width, self.y + self.height, fill="gray")
 
-    def contains(self, event):
-        return self.x <= event.x <= self.x + self.width and \
-               self.y <= event.y <= self.y + self.height
+    #def contains(self, event):
+    #    return self.x <= event.x <= self.x + self.width and \
+    #           self.y <= event.y <= self.y + self.height
 
     def update(self, new_x, new_y):
         # Update the position of the box
@@ -152,6 +155,10 @@ class WhiteBox:
 
         # Bind click
         self.canvas.tag_bind(self.box, "<Button-1>", self.on_click)
+
+    def contains(self, event):
+        return self.x <= event.x <= self.x + self.width and \
+               self.y <= event.y <= self.y + self.height
 
     def update(self, new_x, new_y):
         self.canvas.coords(self.box, new_x, new_y, new_x + self.width, new_y + self.height)
@@ -450,22 +457,15 @@ def run_diagnostics():
                                         index=int(client[0]),
                                         name=str(client[1]),
                                         ip=str(client[2]),
-                                        power_mA=int(client[3]),
+                                        current_mA=int(client[3]),
                                         client_type=int(client[4])
                                     )
                                     client_database.append(cb)
                     print("\n-------------------------------------------------------------------------------------------------------------------------------")
                     print("Detailed Client database info:")
                     for client in client_database:
-                        # Decode the client type
-                        if client.client_type == 0:
-                            type_str = "Standard Client"
-                        elif client.client_type == 1:
-                            type_str = "Master Node"
-                        #elif client.client_type == 2:
-                        #    type_str = "High-Power Device"
 
-                        print(f"Client {client.index}: | Name={client.name} | IP={client.ip} | Power={client.power_mA} mA | Type={client.client_type}")
+                        print(f"Client {client.index}: | Name={client.name} | IP={client.ip} | Power={client.current_mA} mA | Type={client.client_type}")
                     print("-------------------------------------------------------------------------------------------------------------------------------")
                     if array_indexes > 5:
                         raw = data_array[5]
@@ -603,22 +603,22 @@ def create_ssd_display(client_count, ssd_count):
 
     def on_click(event):
         for box in all_boxes:
+            if isinstance(box, GrayBox):    #Skips the gray box (NAS Controller)
+                continue
+
             if box.contains(event):
                 show_box_popup(box)
                 break
 
-    canvas.bind("<Button-1>", on_click)
-
-def show_box_popup(box_type, index):
-    win = tk.Toplevel()
-    win.title(f"{box_type.upper()} #{index}")
-    win.geometry("250x120")
-
-    label = tk.Label(win, text=f"You clicked on {box_type.upper()} #{index}", font=("Arial", 12))
-    label.pack(pady=20)
-
-    close_btn = tk.Button(win, text="OK", command=win.destroy)
-    close_btn.pack()
+def show_box_popup(box):
+    index = box.index
+    data_ref = box.data_ref
+    if isinstance(box, WhiteBox):
+        # show client info
+        show_client_popup(data_ref)
+    elif isinstance(box, GreenBox):
+        # show SSD info
+        show_ssd_popup(data_ref)
 
 def show_client_popup(client: ClientBlock):
     popup = tk.Toplevel()
@@ -628,7 +628,7 @@ def show_client_popup(client: ClientBlock):
         f"Index: {client.index}\n"
         f"Name: {client.name}\n"
         f"IP Address: {client.ip}\n"
-        f"Power Draw: {client.power_mA} mA\n"
+        f"Power Draw: {client.current_mA} mA\n"
         f"Type: {client.client_type}"
     )
 
@@ -834,8 +834,58 @@ def restart_controller():
 
 #Generates a virtual power budget for the NAS system
 def run_virtual_power_budget():
-    print("Running Virtual Power Budget...")
+    global client_database, ssd_database
 
+    voltage_rail = 3.3  # Voltage rail in volts
+
+    # Example controller current (in mA), replace with real value if available
+    controller_current_mA = 200
+    controller_power = controller_current_mA * voltage_rail / 1000
+
+    # Compute total current and power for clients
+    total_client_current = sum(client.current_mA for client in client_database)
+    total_client_power = total_client_current * voltage_rail / 1000  # Convert mA to A for W
+
+    # Compute total current and power for SSDs
+    total_ssd_current = sum(ssd.current_draw_mA for ssd in ssd_database)
+    total_ssd_power = total_ssd_current * voltage_rail / 1000  # W
+
+    # Compute total NAS power draw (controller + clients + SSDs)
+    total_current = controller_current_mA + total_client_current + total_ssd_current
+    total_power = total_current * voltage_rail / 1000  # W
+
+    # Create the popup window
+    popup = tk.Toplevel()
+    popup.title("Virtual Power Budget")
+
+    # Header
+    tk.Label(popup, text="Virtual Power Budget", font=("Arial", 14, "bold")).pack(pady=(10,5))
+
+    # Controller section
+    tk.Label(popup, text="Controller:", font=("Arial", 12, "underline")).pack(anchor="w", padx=10)
+    info = f"  - NAS Controller: {controller_current_mA} mA | {controller_power:.2f} W"
+    tk.Label(popup, text=info, font=("Arial", 11), justify="left").pack(anchor="w", padx=20)
+
+    # Clients section
+    tk.Label(popup, text="\nClients:", font=("Arial", 12, "underline")).pack(anchor="w", padx=10)
+    for client in client_database:
+        power = client.current_mA * voltage_rail / 1000
+        info = f"  - {client.name}: {client.current_mA} mA | {power:.2f} W"
+        tk.Label(popup, text=info, font=("Arial", 11), justify="left").pack(anchor="w", padx=20)
+
+    # SSDs section
+    tk.Label(popup, text="\nSSDs:", font=("Arial", 12, "underline")).pack(anchor="w", padx=10)
+    for ssd in ssd_database:
+        power = ssd.current_draw_mA * voltage_rail / 1000
+        info = f"  - SSD {ssd.index}: {ssd.current_draw_mA} mA | {power:.2f} W"
+        tk.Label(popup, text=info, font=("Arial", 11), justify="left").pack(anchor="w", padx=20)
+
+    # Totals section
+    tk.Label(popup, text=f"\nTotal NAS Current: {total_current} mA", font=("Arial", 12, "bold")).pack(anchor="w", padx=10)
+    tk.Label(popup, text=f"Total NAS Power: {total_power:.2f} W", font=("Arial", 12, "bold")).pack(anchor="w", padx=10)
+
+    # Add some padding at the bottom
+    tk.Label(popup, text="").pack(pady=10)
 
 marlin_icon = PhotoImage(file="marlin_icon.png")
 icon_label = tk.Label(root, image=marlin_icon, bg=window_background_col)
